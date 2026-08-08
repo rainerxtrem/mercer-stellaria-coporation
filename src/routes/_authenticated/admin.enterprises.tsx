@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +32,10 @@ export const Route = createFileRoute("/_authenticated/admin/enterprises")({
 });
 
 function EnterprisesAdminPage() {
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isDetailRoute = pathname.startsWith("/admin/enterprises/");
+
   const qc = useQueryClient();
   const listFn = useServerFn(listEnterprisesAdmin);
   const catalogFn = useServerFn(listEnterpriseModuleCatalog);
@@ -220,6 +224,10 @@ function EnterprisesAdminPage() {
     memberGradeMap.set(row.membership_id, list);
   }
 
+  if (isDetailRoute) {
+    return <Outlet />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -258,12 +266,14 @@ function EnterprisesAdminPage() {
         <CardContent>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {(enterprisesQ.data ?? []).map((enterprise: any) => (
-              <Link
+              <button
                 key={enterprise.id}
-                to="/admin/enterprises/$firmId"
-                params={{ firmId: enterprise.id }}
-                className={`block rounded-xl border p-4 text-left transition ${selectedFirm?.id === enterprise.id ? "border-gold bg-gold/10" : "border-border hover:border-navy/40"}`}
-                onClick={() => setSelectedFirmId(enterprise.id)}
+                type="button"
+                className={`block w-full rounded-xl border p-4 text-left transition ${selectedFirm?.id === enterprise.id ? "border-gold bg-gold/10" : "border-border hover:border-navy/40"}`}
+                onClick={() => {
+                  setSelectedFirmId(enterprise.id);
+                  navigate({ to: "/admin/enterprises/$firmId", params: { firmId: enterprise.id } });
+                }}
               >
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-navy" />
@@ -273,7 +283,7 @@ function EnterprisesAdminPage() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   Modules {enterprise.modules_enabled}/{enterprise.modules_total} · Grades {enterprise.grades_total}
                 </p>
-              </Link>
+              </button>
             ))}
           </div>
         </CardContent>
