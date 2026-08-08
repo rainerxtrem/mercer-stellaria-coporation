@@ -83,7 +83,7 @@ export function AppShell({
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate({ to: variant === "client" ? "/portail-client" : "/espace-avocat" })}>
-                  <UserIcon className="mr-2 h-4 w-4" /> Mon espace
+                  <UserIcon className="mr-2 h-4 w-4" /> {variant === "client" ? "Espace client" : "Mon espace"}
                 </DropdownMenuItem>
                 {variant === "staff" && isAdmin && (
                   <DropdownMenuItem onClick={() => navigate({ to: "/admin" })}>

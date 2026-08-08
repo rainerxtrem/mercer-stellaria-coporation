@@ -1,10 +1,14 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Menu, X, ShieldCheck, LogOut, LayoutDashboard, User as UserIcon, FolderOpen, Users, FileText, Gauge } from "lucide-react";
 import logo from "@/assets/ms-logo.png";
 import { BRAND } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
-import { useSession, useIsBatonnier, signOut } from "@/lib/auth";
+import { useSession, useIsBatonnier, signOut, type AppRole } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { getClientProfile } from "@/lib/client-portal.functions";
 import { NotificationsBell } from "@/components/site/NotificationsBell";
 import { GlobalSearch } from "@/components/site/GlobalSearch";
 import {
@@ -29,6 +33,36 @@ export function Header() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onHome = pathname === "/";
+  const rolesQ = useQuery({
+    queryKey: ["account", "roles", session?.user.id ?? "anonymous"],
+    enabled: Boolean(session?.user.id),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", session!.user.id);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((row) => row.role as AppRole);
+    },
+  });
+  const roles = rolesQ.data ?? [];
+  const hasInternalRole = roles.some((role) => [
+    "batonnier",
+    "avocat",
+    "responsable_cabinet",
+    "assistant",
+    "formateur",
+    "examinateur",
+  ].includes(role));
+  const isSimpleClient = roles.includes("client") && !hasInternalRole;
+  const rolesResolved = !session || rolesQ.isSuccess;
+  const clientProfileFn = useServerFn(getClientProfile);
+  const clientProfileQ = useQuery({
+    queryKey: ["client-portal", "profile", "public-header"],
+    queryFn: () => clientProfileFn(),
+    enabled: Boolean(session) && isSimpleClient,
+  });
+  const clientName = [clientProfileQ.data?.last_name, clientProfileQ.data?.first_name].filter(Boolean).join(" ");
+  const accountLabel = isSimpleClient
+    ? clientName || "Client"
+    : session?.user.email?.split("@")[0] ?? "Compte";
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -54,42 +88,51 @@ export function Header() {
           ))}
         </nav>
         <div className="hidden md:flex items-center gap-2">
-          {session && !onHome && <GlobalSearch />}
+          {session && rolesResolved && !onHome && !isSimpleClient && <GlobalSearch />}
           {!session && (
             <Button asChild variant="outline" size="sm" className="press border-gold/50 text-gold transition-colors hover:bg-gold hover:text-[#0a0e16]">
               <Link to="/connexion"><ShieldCheck className="mr-1.5 h-4 w-4" />Connexion Espaces Clients</Link>
             </Button>
           )}
-          {session && <NotificationsBell />}
+          {session && rolesResolved && !isSimpleClient && <NotificationsBell />}
           {session ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className="press bg-navy text-white hover:bg-navy-soft">
                   <UserIcon className="mr-1.5 h-4 w-4" />
-                  {session.user.email?.split("@")[0] ?? "Compte"}
+                  {accountLabel}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                {isAdmin && (
+                {isSimpleClient ? (
+                  <DropdownMenuItem onClick={() => navigate({ to: "/portail-client" })}>
+                    <UserIcon className="mr-2 h-4 w-4" />Espace client
+                  </DropdownMenuItem>
+                ) : null}
+                {rolesResolved && !isSimpleClient && isAdmin && (
                   <DropdownMenuItem onClick={() => navigate({ to: "/admin" })}>
                     <LayoutDashboard className="mr-2 h-4 w-4" />Administration
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={() => navigate({ to: "/tableau-de-bord" })}>
-                  <Gauge className="mr-2 h-4 w-4" />Tableau de bord
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate({ to: "/dossiers" })}>
-                  <FolderOpen className="mr-2 h-4 w-4" />Mes dossiers
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate({ to: "/clients" })}>
-                  <Users className="mr-2 h-4 w-4" />Mes clients
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate({ to: "/facturation" })}>
-                  <FileText className="mr-2 h-4 w-4" />Facturation
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate({ to: "/espace-avocat" })}>
-                  <UserIcon className="mr-2 h-4 w-4" />Mon espace
-                </DropdownMenuItem>
+                {rolesResolved && !isSimpleClient && (
+                  <>
+                    <DropdownMenuItem onClick={() => navigate({ to: "/tableau-de-bord" })}>
+                      <Gauge className="mr-2 h-4 w-4" />Tableau de bord
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate({ to: "/dossiers" })}>
+                      <FolderOpen className="mr-2 h-4 w-4" />Mes dossiers
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate({ to: "/clients" })}>
+                      <Users className="mr-2 h-4 w-4" />Mes clients
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate({ to: "/facturation" })}>
+                      <FileText className="mr-2 h-4 w-4" />Facturation
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate({ to: "/espace-avocat" })}>
+                      <UserIcon className="mr-2 h-4 w-4" />Mon espace
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut(navigate)}>
                   <LogOut className="mr-2 h-4 w-4" />Se déconnecter
@@ -123,7 +166,12 @@ export function Header() {
               )}
               {session ? (
                 <>
-                  {isAdmin && (
+                  {isSimpleClient && (
+                    <Button asChild className="bg-navy text-white">
+                      <Link to="/portail-client" onClick={() => setOpen(false)}>Espace client</Link>
+                    </Button>
+                  )}
+                  {rolesResolved && !isSimpleClient && isAdmin && (
                     <Button asChild className="bg-navy text-white">
                       <Link to="/admin" onClick={() => setOpen(false)}>Administration</Link>
                     </Button>
