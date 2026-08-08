@@ -40,6 +40,21 @@ function isUniqueIdConflictError(error: unknown): boolean {
   );
 }
 
+function isAuthEmailConflictError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: unknown; message?: unknown; constraint?: unknown };
+  const code = typeof err.code === "string" ? err.code : "";
+  const constraint = typeof err.constraint === "string" ? err.constraint : "";
+  const message = typeof err.message === "string" ? err.message.toLowerCase() : "";
+  return (
+    code === "23505" &&
+    (constraint.includes("users_email") ||
+      message.includes("users_email") ||
+      message.includes("duplicate") ||
+      message.includes("email"))
+  );
+}
+
 async function ensureClientRole(userId: string): Promise<void> {
   await withSession({ role: "service", claims: null }, async (client) => {
     await client.query(
@@ -64,6 +79,42 @@ async function createClientUser(emailCandidate: string, fullName: string): Promi
     );
     return rows[0]!.id;
   });
+}
+
+async function createOrGetClientUser(
+  discordUserId: string,
+  fullName: string,
+  preferredEmail: string | null,
+): Promise<string> {
+  const candidates = Array.from(
+    new Set([
+      `discord-${discordUserId}@clients.local`,
+      preferredEmail?.trim().toLowerCase() || "",
+    ].filter(Boolean)),
+  );
+
+  for (const email of candidates) {
+    const existing = await withSession({ role: "service", claims: null }, async (client) => {
+      const { rows } = await client.query<{ id: string }>(
+        `SELECT id
+           FROM auth.users
+          WHERE lower(email) = lower($1)
+          LIMIT 1`,
+        [email],
+      );
+      return rows[0]?.id ?? null;
+    });
+    if (existing) return existing;
+
+    try {
+      return await createClientUser(email, fullName);
+    } catch (error) {
+      if (isAuthEmailConflictError(error)) continue;
+      throw error;
+    }
+  }
+
+  throw new Error("client_user_create_failed");
 }
 
 async function ensureClientEnterpriseMemberships(
@@ -264,9 +315,8 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
             let profileId = clientRecord.profile_id;
             if (!profileId) {
               const fullName = `${clientRecord.first_name} ${clientRecord.last_name}`;
-              const emailCandidate =
-                clientRecord.email ?? context.discordEmail ?? `discord-${context.discordUserId}@clients.local`;
-              profileId = await createClientUser(emailCandidate.toLowerCase(), fullName);
+              const emailCandidate = clientRecord.email ?? context.discordEmail ?? null;
+              profileId = await createOrGetClientUser(context.discordUserId, fullName, emailCandidate);
 
               await withSession({ role: "service", claims: null }, async (client) => {
                 await client.query(
@@ -303,9 +353,11 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
             });
           } else {
             const fullName = `${data.first_name} ${data.last_name}`;
-            const emailCandidate =
-              context.discordEmail ?? `discord-${context.discordUserId}@clients.local`;
-            const profileId = await createClientUser(emailCandidate.toLowerCase(), fullName);
+            const profileId = await createOrGetClientUser(
+              context.discordUserId,
+              fullName,
+              context.discordEmail ?? null,
+            );
             const firmId = activeFirmIds[0] ?? null;
 
             if (!firmId) {
@@ -392,6 +444,13 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
             );
           }
 
+          if (error instanceof Error && error.message === "client_user_create_failed") {
+            return new Response(
+              JSON.stringify({ ok: false, message: "Création du compte impossible pour le moment. Réessayez." }),
+              { status: 409, headers },
+            );
+          }
+
           if (error instanceof Error && error.message === "identity_ambiguous") {
             return new Response(
               JSON.stringify({ ok: false, message: "Plusieurs fiches correspondent. Contactez votre cabinet." }),
@@ -400,7 +459,7 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
           }
 
           return new Response(
-            JSON.stringify({ ok: false, message: "Inscription impossible pour le moment. Réessayez." }),
+            JSON.stringify({ ok: false, message: "Inscription impossible. Contactez la direction si le problème persiste." }),
             { status: 500, headers },
           );
         }
