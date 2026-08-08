@@ -151,6 +151,17 @@ export function ProfessionalMessaging() {
             </p>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {threadsQ.isLoading && (
+              <p className="px-5 py-12 text-center text-sm text-muted-foreground">Chargement des conversations...</p>
+            )}
+            {threadsQ.isError && (
+              <div className="mx-3 my-6 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-center">
+                <p className="text-sm text-destructive">Les conversations clients n'ont pas pu être chargées.</p>
+                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => threadsQ.refetch()}>
+                  Réessayer
+                </Button>
+              </div>
+            )}
             {threads.map((thread) => (
               <button
                 key={`${thread.kind}:${thread.id}`}
@@ -206,6 +217,9 @@ export function ProfessionalMessaging() {
                 </div>
               </header>
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-muted/10 px-4 py-6 sm:px-8">
+                {(generalQ.isError || matterQ.isError) && (
+                  <p className="py-8 text-center text-sm text-destructive">Impossible de charger les messages de cette conversation.</p>
+                )}
                 {messages.map((message: any) => {
                   const mine = message.author_id === session?.user.id;
                   return (

@@ -66,6 +66,7 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const locationSearch = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
   const isAdmin = useIsBatonnier();
   const { activeEnterprise, navModules } = useEnterpriseWorkspace();
 
@@ -93,8 +94,13 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
     primaryNav.push({ to: "/espace-avocat", label: "Mon espace", icon: Gauge });
   }
 
-  const isActive = (to: string, exact?: boolean) =>
-    exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
+  const isActive = (to: string, exact?: boolean) => {
+    const routePath = to.split("?")[0];
+    const isMessagingView = locationSearch.messagerie === true || locationSearch.messagerie === "1";
+    if (to.includes("messagerie=1")) return pathname === routePath && isMessagingView;
+    const matchesPath = exact ? pathname === routePath : pathname === routePath || pathname.startsWith(routePath + "/");
+    return matchesPath && !(routePath === "/dossiers" && isMessagingView);
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">

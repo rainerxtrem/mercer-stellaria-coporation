@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
@@ -32,6 +32,12 @@ export function AppShell({
   const email = session?.user.email ?? "";
   const accountName = variant === "client" ? displayName || "Client" : email.split("@")[0] || "Compte";
   const initials = accountName.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+
+  useEffect(() => {
+    if (variant === "staff" && pathname === "/messagerie-professionnelle") {
+      void navigate({ to: "/dossiers", search: { messagerie: true }, replace: true });
+    }
+  }, [navigate, pathname, variant]);
 
   const deniedByModule = (() => {
     if (!context || !activeEnterprise) return false;

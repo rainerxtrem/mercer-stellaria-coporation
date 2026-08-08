@@ -16,8 +16,12 @@ import { listClients } from "@/lib/clients.functions";
 import { toast } from "sonner";
 import { FolderOpen, Plus, Trash2, Search } from "lucide-react";
 import { matterStatusMeta, MATTER_STATUS_OPTIONS } from "@/lib/matter-status";
+import { ProfessionalMessaging } from "@/components/app/ProfessionalMessaging";
 
 export const Route = createFileRoute("/_authenticated/dossiers/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    messagerie: search.messagerie === "1" || search.messagerie === true,
+  }),
   head: () => ({ meta: [{ title: "Mes dossiers — Mercer & Stellaria Corporation" }] }),
   component: Page,
 });
@@ -34,6 +38,7 @@ function StatusBadge({ status }: { status: string }) {
 
 
 function Page() {
+  const { messagerie } = Route.useSearch();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [open, setOpen] = useState(false);
@@ -70,6 +75,8 @@ function Page() {
   });
 
   const [form, setForm] = useState({ title: "", client_id: "", type: "", description: "", status: "open" as const });
+
+  if (messagerie) return <ProfessionalMessaging />;
 
   return (
     <>
