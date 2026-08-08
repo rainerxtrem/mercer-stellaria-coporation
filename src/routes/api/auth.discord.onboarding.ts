@@ -66,21 +66,31 @@ async function createClientUser(emailCandidate: string, fullName: string): Promi
   });
 }
 
-async function ensureClientEnterpriseMembership(userId: string, firmId: string): Promise<void> {
+async function ensureClientEnterpriseMemberships(
+  userId: string,
+  firmIds: string[],
+  preferredFirmId: string,
+): Promise<void> {
+  const uniqueFirmIds = Array.from(new Set(firmIds.filter(Boolean)));
+  if (uniqueFirmIds.length === 0) return;
+
+  const defaultFirmId = uniqueFirmIds.includes(preferredFirmId) ? preferredFirmId : uniqueFirmIds[0]!;
+
   await withSession({ role: "service", claims: null }, async (client) => {
     await client.query(
       `INSERT INTO public.enterprise_memberships (user_id, firm_id, status, is_default)
-       VALUES ($1, $2, 'active', true)
+       SELECT $1, fid, 'active', false
+         FROM unnest($2::uuid[]) AS fid
        ON CONFLICT (user_id, firm_id)
        DO UPDATE SET status = 'active', updated_at = now()`,
-      [userId, firmId],
+      [userId, uniqueFirmIds],
     );
 
     await client.query(
       `UPDATE public.enterprise_memberships
           SET is_default = (firm_id = $2)
         WHERE user_id = $1`,
-      [userId, firmId],
+      [userId, defaultFirmId],
     );
 
     await client.query(
@@ -88,22 +98,20 @@ async function ensureClientEnterpriseMembership(userId: string, firmId: string):
           SET active_firm_id = $2,
               updated_at = now()
         WHERE id = $1`,
-      [userId, firmId],
+      [userId, defaultFirmId],
     );
   });
 }
 
-async function resolveSingleActiveFirmId(): Promise<string | null> {
+async function resolveActiveFirmIds(): Promise<string[]> {
   return withSession({ role: "service", claims: null }, async (client) => {
     const { rows } = await client.query<{ id: string }>(
       `SELECT id
          FROM public.firms
         WHERE status = 'active'
-        ORDER BY created_at ASC
-        LIMIT 2`,
+        ORDER BY created_at ASC`,
     );
-    if (rows.length !== 1) return null;
-    return rows[0]!.id;
+    return rows.map((row) => row.id);
   });
 }
 
@@ -224,6 +232,7 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
           let activeClientId: string;
           let activeProfileId: string;
           let activeFirmId: string;
+          const activeFirmIds = await resolveActiveFirmIds();
 
           if (clientRecord) {
             const sameIdentity =
@@ -297,11 +306,11 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
             const emailCandidate =
               context.discordEmail ?? `discord-${context.discordUserId}@clients.local`;
             const profileId = await createClientUser(emailCandidate.toLowerCase(), fullName);
-            const firmId = await resolveSingleActiveFirmId();
+            const firmId = activeFirmIds[0] ?? null;
 
             if (!firmId) {
               return new Response(
-                JSON.stringify({ ok: false, message: "Aucune entreprise unique active trouvée. Contactez la direction." }),
+                JSON.stringify({ ok: false, message: "Aucune entreprise active trouvée. Contactez la direction." }),
                 { status: 409, headers },
               );
             }
@@ -353,7 +362,10 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
           }
 
           await ensureClientRole(activeProfileId);
-          await ensureClientEnterpriseMembership(activeProfileId, activeFirmId);
+          const membershipFirmIds = activeFirmIds.length > 0
+            ? activeFirmIds
+            : [activeFirmId];
+          await ensureClientEnterpriseMemberships(activeProfileId, membershipFirmIds, activeFirmId);
 
           const session = await issueSessionForUserId(activeProfileId);
 
