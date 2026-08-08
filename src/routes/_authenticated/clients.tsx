@@ -88,6 +88,7 @@ function Page() {
                   <TableRow>
                     <TableHead>Nom</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>ID unique</TableHead>
                     <TableHead>Téléphone</TableHead>
                     <TableHead>Adresse</TableHead>
                     <TableHead className="w-24 text-right">Actions</TableHead>
@@ -98,6 +99,7 @@ function Page() {
                     <TableRow key={c.id}>
                       <TableCell className="font-medium">{c.last_name.toUpperCase()} {c.first_name}</TableCell>
                       <TableCell>{c.email ?? "—"}</TableCell>
+                      <TableCell>{c.portal_unique_id ?? "—"}</TableCell>
                       <TableCell>{c.phone ?? "—"}</TableCell>
                       <TableCell className="max-w-xs truncate">{c.address ?? "—"}</TableCell>
                       <TableCell className="text-right">
@@ -109,7 +111,7 @@ function Page() {
                     </TableRow>
                   ))}
                   {(clients.data ?? []).length === 0 && !clients.isLoading && (
-                    <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Aucun client enregistré.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Aucun client enregistré.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
