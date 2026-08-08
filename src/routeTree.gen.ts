@@ -43,6 +43,7 @@ import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedExaminateurRouteImport } from './routes/_authenticated/examinateur'
 import { Route as AuthenticatedFormateurRouteImport } from './routes/_authenticated/formateur'
 import { Route as AuthenticatedMesDossiersDisciplinairesRouteImport } from './routes/_authenticated/mes-dossiers-disciplinaires'
+import { Route as AuthenticatedMessagerieRouteImport } from './routes/_authenticated/messagerie'
 import { Route as AuthenticatedTableauDeBordRouteImport } from './routes/_authenticated/tableau-de-bord'
 import { Route as AuthenticatedTachesRouteImport } from './routes/_authenticated/taches'
 import { Route as ApiDbRouteImport } from './routes/api/db'
@@ -275,6 +276,11 @@ const AuthenticatedMesDossiersDisciplinairesRoute =
     path: '/mes-dossiers-disciplinaires',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMessagerieRoute = AuthenticatedMessagerieRouteImport.update({
+  id: '/messagerie',
+  path: '/messagerie',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTableauDeBordRoute =
   AuthenticatedTableauDeBordRouteImport.update({
     id: '/tableau-de-bord',
@@ -638,6 +644,7 @@ export interface FileRoutesByFullPath {
   '/examinateur': typeof AuthenticatedExaminateurRoute
   '/formateur': typeof AuthenticatedFormateurRoute
   '/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
+  '/messagerie': typeof AuthenticatedMessagerieRoute
   '/tableau-de-bord': typeof AuthenticatedTableauDeBordRoute
   '/taches': typeof AuthenticatedTachesRoute
   '/api/db': typeof ApiDbRoute
@@ -729,6 +736,7 @@ export interface FileRoutesByTo {
   '/examinateur': typeof AuthenticatedExaminateurRoute
   '/formateur': typeof AuthenticatedFormateurRoute
   '/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
+  '/messagerie': typeof AuthenticatedMessagerieRoute
   '/tableau-de-bord': typeof AuthenticatedTableauDeBordRoute
   '/taches': typeof AuthenticatedTachesRoute
   '/api/db': typeof ApiDbRoute
@@ -823,6 +831,7 @@ export interface FileRoutesById {
   '/_authenticated/examinateur': typeof AuthenticatedExaminateurRoute
   '/_authenticated/formateur': typeof AuthenticatedFormateurRoute
   '/_authenticated/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
+  '/_authenticated/messagerie': typeof AuthenticatedMessagerieRoute
   '/_authenticated/tableau-de-bord': typeof AuthenticatedTableauDeBordRoute
   '/_authenticated/taches': typeof AuthenticatedTachesRoute
   '/api/db': typeof ApiDbRoute
@@ -918,6 +927,7 @@ export interface FileRouteTypes {
     | '/examinateur'
     | '/formateur'
     | '/mes-dossiers-disciplinaires'
+    | '/messagerie'
     | '/tableau-de-bord'
     | '/taches'
     | '/api/db'
@@ -1009,6 +1019,7 @@ export interface FileRouteTypes {
     | '/examinateur'
     | '/formateur'
     | '/mes-dossiers-disciplinaires'
+    | '/messagerie'
     | '/tableau-de-bord'
     | '/taches'
     | '/api/db'
@@ -1102,6 +1113,7 @@ export interface FileRouteTypes {
     | '/_authenticated/examinateur'
     | '/_authenticated/formateur'
     | '/_authenticated/mes-dossiers-disciplinaires'
+    | '/_authenticated/messagerie'
     | '/_authenticated/tableau-de-bord'
     | '/_authenticated/taches'
     | '/api/db'
@@ -1442,6 +1454,13 @@ declare module '@tanstack/react-router' {
       path: '/mes-dossiers-disciplinaires'
       fullPath: '/mes-dossiers-disciplinaires'
       preLoaderRoute: typeof AuthenticatedMesDossiersDisciplinairesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/messagerie': {
+      id: '/_authenticated/messagerie'
+      path: '/messagerie'
+      fullPath: '/messagerie'
+      preLoaderRoute: typeof AuthenticatedMessagerieRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/tableau-de-bord': {
@@ -1960,6 +1979,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedExaminateurRoute: typeof AuthenticatedExaminateurRoute
   AuthenticatedFormateurRoute: typeof AuthenticatedFormateurRoute
   AuthenticatedMesDossiersDisciplinairesRoute: typeof AuthenticatedMesDossiersDisciplinairesRoute
+  AuthenticatedMessagerieRoute: typeof AuthenticatedMessagerieRoute
   AuthenticatedTableauDeBordRoute: typeof AuthenticatedTableauDeBordRoute
   AuthenticatedTachesRoute: typeof AuthenticatedTachesRoute
   AuthenticatedCabinetDossiersRoute: typeof AuthenticatedCabinetDossiersRoute
@@ -1987,6 +2007,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFormateurRoute: AuthenticatedFormateurRoute,
   AuthenticatedMesDossiersDisciplinairesRoute:
     AuthenticatedMesDossiersDisciplinairesRoute,
+  AuthenticatedMessagerieRoute: AuthenticatedMessagerieRoute,
   AuthenticatedTableauDeBordRoute: AuthenticatedTableauDeBordRoute,
   AuthenticatedTachesRoute: AuthenticatedTachesRoute,
   AuthenticatedCabinetDossiersRoute: AuthenticatedCabinetDossiersRoute,
