@@ -26,6 +26,20 @@ function normalizeUniqueId(value: string): string {
   return value.trim().toUpperCase();
 }
 
+function isUniqueIdConflictError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: unknown; message?: unknown; constraint?: unknown };
+  const code = typeof err.code === "string" ? err.code : "";
+  const constraint = typeof err.constraint === "string" ? err.constraint : "";
+  const message = typeof err.message === "string" ? err.message.toLowerCase() : "";
+  return (
+    code === "23505" &&
+    (constraint.includes("clients_portal_unique_id_key") ||
+      message.includes("clients_portal_unique_id_key") ||
+      message.includes("portal_unique_id"))
+  );
+}
+
 async function ensureClientRole(userId: string): Promise<void> {
   await withSession({ role: "service", claims: null }, async (client) => {
     await client.query(
@@ -48,6 +62,47 @@ async function createClientUser(emailCandidate: string, fullName: string): Promi
        RETURNING id`,
       [emailCandidate, JSON.stringify({ full_name: fullName })],
     );
+    return rows[0]!.id;
+  });
+}
+
+async function ensureClientEnterpriseMembership(userId: string, firmId: string): Promise<void> {
+  await withSession({ role: "service", claims: null }, async (client) => {
+    await client.query(
+      `INSERT INTO public.enterprise_memberships (user_id, firm_id, status, is_default)
+       VALUES ($1, $2, 'active', true)
+       ON CONFLICT (user_id, firm_id)
+       DO UPDATE SET status = 'active', updated_at = now()`,
+      [userId, firmId],
+    );
+
+    await client.query(
+      `UPDATE public.enterprise_memberships
+          SET is_default = (firm_id = $2)
+        WHERE user_id = $1`,
+      [userId, firmId],
+    );
+
+    await client.query(
+      `UPDATE public.profiles
+          SET active_firm_id = $2,
+              updated_at = now()
+        WHERE id = $1`,
+      [userId, firmId],
+    );
+  });
+}
+
+async function resolveSingleActiveFirmId(): Promise<string | null> {
+  return withSession({ role: "service", claims: null }, async (client) => {
+    const { rows } = await client.query<{ id: string }>(
+      `SELECT id
+         FROM public.firms
+        WHERE status = 'active'
+        ORDER BY created_at ASC
+        LIMIT 2`,
+    );
+    if (rows.length !== 1) return null;
     return rows[0]!.id;
   });
 }
@@ -103,30 +158,41 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
           const clientRecord = await withSession({ role: "service", claims: null }, async (client) => {
             const rowShape = `id, first_name, last_name, birth_date::text, email, profile_id, firm_id, discord_user_id, portal_unique_id`;
 
-            const duplicateUniqueId = await client.query<{
+            const linkedDiscord = await client.query<{
               id: string;
               first_name: string;
               last_name: string;
               birth_date: string | null;
+              email: string | null;
+              profile_id: string | null;
+              firm_id: string | null;
+              discord_user_id: string | null;
+              portal_unique_id: string | null;
             }>(
-              `SELECT id, first_name, last_name, birth_date::text
+              `SELECT ${rowShape}
+                 FROM public.clients
+                WHERE discord_user_id = $1
+                LIMIT 1`,
+              [context.discordUserId],
+            );
+
+            const duplicateUniqueId = await client.query<{
+              id: string;
+            }>(
+              `SELECT id
                  FROM public.clients
                 WHERE upper(portal_unique_id) = $1
                 LIMIT 1`,
               [normalizedUniqueId],
             );
 
+            const linked = linkedDiscord.rows[0] ?? null;
             const duplicate = duplicateUniqueId.rows[0] ?? null;
-            if (
-              duplicate &&
-              !(
-                normalizeName(duplicate.first_name) === normalizedFirstName &&
-                normalizeName(duplicate.last_name) === normalizedLastName &&
-                String(duplicate.birth_date ?? "") === data.birth_date
-              )
-            ) {
+            if (duplicate && (!linked || duplicate.id !== linked.id)) {
               throw new Error("unique_id_taken");
             }
+
+            if (linked) return linked;
 
             const { rows } = await client.query<{
               id: string;
@@ -149,92 +215,147 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
               [normalizedFirstName, normalizedLastName, data.birth_date],
             );
 
-            if (rows.length > 1) {
-              const exactUnique = rows.filter(
-                (r) => normalizeUniqueId(r.portal_unique_id ?? "") === normalizedUniqueId,
-              );
-              if (exactUnique.length === 1) return exactUnique[0];
-              throw new Error("identity_ambiguous");
-            }
+            if (rows.length > 1) throw new Error("identity_ambiguous");
 
             if (rows.length !== 1) return null;
             return rows[0];
           });
 
-          if (!clientRecord || !clientRecord.firm_id) {
-            return new Response(
-              JSON.stringify({ ok: false, message: "Client introuvable. Vérifiez vos informations." }),
-              { status: 404, headers },
-            );
-          }
+          let activeClientId: string;
+          let activeProfileId: string;
+          let activeFirmId: string;
 
-          const sameIdentity =
-            normalizeName(clientRecord.first_name) === normalizedFirstName &&
-            normalizeName(clientRecord.last_name) === normalizedLastName &&
-            String(clientRecord.birth_date ?? "") === data.birth_date;
+          if (clientRecord) {
+            const sameIdentity =
+              normalizeName(clientRecord.first_name) === normalizedFirstName &&
+              normalizeName(clientRecord.last_name) === normalizedLastName &&
+              String(clientRecord.birth_date ?? "") === data.birth_date;
 
-          if (!sameIdentity) {
-            return new Response(
-              JSON.stringify({ ok: false, message: "Les informations ne correspondent pas à la fiche client." }),
-              { status: 403, headers },
-            );
-          }
+            if (!sameIdentity) {
+              return new Response(
+                JSON.stringify({ ok: false, message: "Les informations ne correspondent pas à la fiche client." }),
+                { status: 403, headers },
+              );
+            }
 
-          const currentUniqueId = normalizeUniqueId(clientRecord.portal_unique_id ?? "");
-          if (currentUniqueId && currentUniqueId !== normalizedUniqueId) {
-            return new Response(
-              JSON.stringify({ ok: false, message: "Cet ID unique est déjà utilisé." }),
-              { status: 409, headers },
-            );
-          }
+            if (!clientRecord.firm_id) {
+              return new Response(
+                JSON.stringify({ ok: false, message: "Client introuvable. Vérifiez vos informations." }),
+                { status: 404, headers },
+              );
+            }
 
-          if (clientRecord.discord_user_id && clientRecord.discord_user_id !== context.discordUserId) {
-            return new Response(
-              JSON.stringify({ ok: false, message: "Cette fiche client est déjà liée à un autre compte Discord." }),
-              { status: 409, headers },
-            );
-          }
+            if (clientRecord.discord_user_id && clientRecord.discord_user_id !== context.discordUserId) {
+              return new Response(
+                JSON.stringify({ ok: false, message: "Cette fiche client est déjà liée à un autre compte Discord." }),
+                { status: 409, headers },
+              );
+            }
 
-          let profileId = clientRecord.profile_id;
-          if (!profileId) {
-            const fullName = `${clientRecord.first_name} ${clientRecord.last_name}`;
-            const emailCandidate =
-              clientRecord.email ?? context.discordEmail ?? `discord-${context.discordUserId}@clients.local`;
-            profileId = await createClientUser(emailCandidate.toLowerCase(), fullName);
+            let profileId = clientRecord.profile_id;
+            if (!profileId) {
+              const fullName = `${clientRecord.first_name} ${clientRecord.last_name}`;
+              const emailCandidate =
+                clientRecord.email ?? context.discordEmail ?? `discord-${context.discordUserId}@clients.local`;
+              profileId = await createClientUser(emailCandidate.toLowerCase(), fullName);
+
+              await withSession({ role: "service", claims: null }, async (client) => {
+                await client.query(
+                  `INSERT INTO public.profiles (id, full_name)
+                   VALUES ($1, $2)
+                   ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name`,
+                  [profileId, fullName],
+                );
+
+                await client.query(
+                  `UPDATE public.clients
+                      SET profile_id = $2,
+                          updated_at = now()
+                    WHERE id = $1`,
+                  [clientRecord.id, profileId],
+                );
+              });
+            }
+
+            activeClientId = clientRecord.id;
+            activeProfileId = profileId;
+            activeFirmId = clientRecord.firm_id;
 
             await withSession({ role: "service", claims: null }, async (client) => {
               await client.query(
-                `INSERT INTO public.profiles (id, full_name)
-                 VALUES ($1, $2)
-                 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name`,
-                [profileId, fullName],
-              );
-
-              await client.query(
                 `UPDATE public.clients
-                    SET profile_id = $2,
+                    SET discord_user_id = $2,
+                        discord_username = $3,
+                        portal_unique_id = $4,
                         updated_at = now()
                   WHERE id = $1`,
-                [clientRecord.id, profileId],
+                [activeClientId, context.discordUserId, context.discordUsername, normalizedUniqueId],
               );
             });
+          } else {
+            const fullName = `${data.first_name} ${data.last_name}`;
+            const emailCandidate =
+              context.discordEmail ?? `discord-${context.discordUserId}@clients.local`;
+            const profileId = await createClientUser(emailCandidate.toLowerCase(), fullName);
+            const firmId = await resolveSingleActiveFirmId();
+
+            if (!firmId) {
+              return new Response(
+                JSON.stringify({ ok: false, message: "Aucune entreprise unique active trouvée. Contactez la direction." }),
+                { status: 409, headers },
+              );
+            }
+
+            const created = await withSession({ role: "service", claims: null }, async (client) => {
+              await client.query(
+                `INSERT INTO public.profiles (id, full_name, active_firm_id)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (id)
+                 DO UPDATE SET full_name = EXCLUDED.full_name, active_firm_id = EXCLUDED.active_firm_id`,
+                [profileId, fullName, firmId],
+              );
+
+              const { rows } = await client.query<{ id: string }>(
+                `INSERT INTO public.clients (
+                    owner_id,
+                    firm_id,
+                    profile_id,
+                    first_name,
+                    last_name,
+                    birth_date,
+                    email,
+                    discord_user_id,
+                    discord_username,
+                    portal_unique_id
+                  )
+                 VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10)
+                 RETURNING id`,
+                [
+                  profileId,
+                  firmId,
+                  profileId,
+                  data.first_name,
+                  data.last_name,
+                  data.birth_date,
+                  context.discordEmail,
+                  context.discordUserId,
+                  context.discordUsername,
+                  normalizedUniqueId,
+                ],
+              );
+
+              return rows[0]!.id;
+            });
+
+            activeClientId = created;
+            activeProfileId = profileId;
+            activeFirmId = firmId;
           }
 
-          await ensureClientRole(profileId);
+          await ensureClientRole(activeProfileId);
+          await ensureClientEnterpriseMembership(activeProfileId, activeFirmId);
 
-          await withSession({ role: "service", claims: null }, async (client) => {
-            await client.query(
-              `UPDATE public.clients
-                  SET discord_user_id = $2,
-                      discord_username = $3,
-                      portal_unique_id = COALESCE(portal_unique_id, $4),
-                      updated_at = now()
-                WHERE id = $1`,
-              [clientRecord.id, context.discordUserId, context.discordUsername, normalizedUniqueId],
-            );
-          });
-
-          const session = await issueSessionForUserId(profileId);
+          const session = await issueSessionForUserId(activeProfileId);
 
           return new Response(
             JSON.stringify({
@@ -246,6 +367,13 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
           );
         } catch (error) {
           if (error instanceof Error && error.message === "unique_id_taken") {
+            return new Response(
+              JSON.stringify({ ok: false, message: "Cet ID unique existe déjà. Choisissez-en un autre." }),
+              { status: 409, headers },
+            );
+          }
+
+          if (isUniqueIdConflictError(error)) {
             return new Response(
               JSON.stringify({ ok: false, message: "Cet ID unique existe déjà. Choisissez-en un autre." }),
               { status: 409, headers },
