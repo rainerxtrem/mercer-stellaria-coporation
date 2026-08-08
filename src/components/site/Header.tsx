@@ -97,14 +97,16 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="flex items-center gap-2">
-              <Button asChild size="sm" className="press bg-navy text-white hover:bg-navy-soft">
-                <Link to="/auth"><LogIn className="mr-1.5 h-4 w-4" />Connexion</Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="text-foreground/85 hover:text-foreground">
-                <Link to="/inscription">Créer un compte</Link>
-              </Button>
-            </div>
+            !onHome && (
+              <div className="flex items-center gap-2">
+                <Button asChild size="sm" className="press bg-navy text-white hover:bg-navy-soft">
+                  <Link to="/auth"><LogIn className="mr-1.5 h-4 w-4" />Connexion</Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm" className="text-foreground/85 hover:text-foreground">
+                  <Link to="/inscription">Créer un compte</Link>
+                </Button>
+              </div>
+            )
           )}
         </div>
         <button className="xl:hidden" onClick={() => setOpen((v) => !v)} aria-label="Menu">
@@ -143,12 +145,16 @@ export function Header() {
                 </>
               ) : (
                 <>
-                  <Button asChild className="bg-navy text-white">
-                    <Link to="/auth" onClick={() => setOpen(false)}>Connexion</Link>
-                  </Button>
-                  <Button asChild variant="ghost">
-                    <Link to="/inscription" onClick={() => setOpen(false)}>Créer un compte</Link>
-                  </Button>
+                  {!onHome && (
+                    <>
+                      <Button asChild className="bg-navy text-white">
+                        <Link to="/auth" onClick={() => setOpen(false)}>Connexion</Link>
+                      </Button>
+                      <Button asChild variant="ghost">
+                        <Link to="/inscription" onClick={() => setOpen(false)}>Créer un compte</Link>
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
             </div>
