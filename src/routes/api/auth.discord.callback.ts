@@ -8,10 +8,10 @@ import {
 import { issueSessionForUserId } from "@/backend/auth/service";
 import { withSession } from "@/backend/db/execute";
 
-const OAUTH_COOKIE = "sba_discord_oauth";
+const OAUTH_COOKIE = "sba_discord_oauth_callback";
 const LEGACY_STATE_COOKIE = "sba_discord_oauth_state";
 const LEGACY_REDIRECT_COOKIE = "sba_discord_oauth_redirect";
-const LEGACY_CALLBACK_COOKIE = "sba_discord_oauth_callback";
+const LEGACY_CALLBACK_COOKIE = "sba_discord_oauth_callback_uri";
 const PRIVILEGED_ROLES = new Set([
   "batonnier",
   "avocat",
@@ -99,7 +99,8 @@ export const Route = createFileRoute("/api/auth/discord/callback")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const contextCookie = decodeOAuthContext(readCookie(request, OAUTH_COOKIE));
+        const rawOAuthCookie = readCookie(request, OAUTH_COOKIE);
+        const contextCookie = decodeOAuthContext(rawOAuthCookie);
         const legacyStateCookie = readCookie(request, LEGACY_STATE_COOKIE);
         const legacyRedirectCookie = readCookie(request, LEGACY_REDIRECT_COOKIE);
         const legacyCallbackCookie = readCookie(request, LEGACY_CALLBACK_COOKIE);
@@ -114,7 +115,12 @@ export const Route = createFileRoute("/api/auth/discord/callback")({
 
         const expectedState = contextCookie?.state ?? legacyStateCookie;
         const redirectTo = sanitizeRedirect(contextCookie?.redirectTo ?? legacyRedirectCookie ?? "/portail-client");
-        const callbackUri = (contextCookie?.callbackUri ?? legacyCallbackCookie ?? `${url.origin}/api/auth/discord/callback`).trim();
+        const callbackUri = (
+          contextCookie?.callbackUri ??
+          legacyCallbackCookie ??
+          (rawOAuthCookie?.startsWith("http") ? rawOAuthCookie : null) ??
+          `${url.origin}/api/auth/discord/callback`
+        ).trim();
 
         if (!state || !expectedState || state !== expectedState) {
           return new Response(renderErrorPage("Etat OAuth invalide, veuillez recommencer.").body, {

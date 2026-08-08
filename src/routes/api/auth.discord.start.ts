@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { buildDiscordAuthorizeUrl, getDiscordConfig } from "@/backend/auth/discord";
 
-const OAUTH_COOKIE = "sba_discord_oauth";
+const OAUTH_COOKIE = "sba_discord_oauth_callback";
 
 function sanitizeRedirect(value: string | null): string {
   if (!value) return "/portail-client";
