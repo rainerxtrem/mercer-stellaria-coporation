@@ -15,11 +15,21 @@ const payloadSchema = z.object({
   first_name: z.string().trim().min(1).max(120),
   last_name: z.string().trim().min(1).max(120),
   birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  unique_id: z.string().uuid(),
+  unique_id: z.string().trim().min(1).max(64),
 });
 
 function normalizeName(value: string): string {
   return value.trim().toLocaleLowerCase("fr-FR");
+}
+
+function normalizeUniqueId(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 async function ensureClientRole(userId: string): Promise<void> {
@@ -84,9 +94,36 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
         }
 
         const data = parsed.data;
+        const normalizedUniqueId = normalizeUniqueId(data.unique_id);
+        const normalizedFirstName = normalizeName(data.first_name);
+        const normalizedLastName = normalizeName(data.last_name);
+        const uniqueLength = Math.min(Math.max(normalizedUniqueId.length, 4), 32);
 
         try {
           const clientRecord = await withSession({ role: "service", claims: null }, async (client) => {
+            const rowShape = `id, first_name, last_name, birth_date::text, email, profile_id, firm_id, discord_user_id`;
+
+            const byUuid = isUuid(normalizedUniqueId)
+              ? await client.query<{
+                  id: string;
+                  first_name: string;
+                  last_name: string;
+                  birth_date: string | null;
+                  email: string | null;
+                  profile_id: string | null;
+                  firm_id: string | null;
+                  discord_user_id: string | null;
+                }>(
+                  `SELECT ${rowShape}
+                     FROM public.clients
+                    WHERE id = $1
+                    LIMIT 1`,
+                  [normalizedUniqueId],
+                )
+              : null;
+
+            if (byUuid?.rows?.[0]) return byUuid.rows[0];
+
             const { rows } = await client.query<{
               id: string;
               first_name: string;
@@ -97,13 +134,17 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
               firm_id: string | null;
               discord_user_id: string | null;
             }>(
-              `SELECT id, first_name, last_name, birth_date::text, email, profile_id, firm_id, discord_user_id
+              `SELECT ${rowShape}
                  FROM public.clients
-                WHERE id = $1
-                LIMIT 1`,
-              [data.unique_id],
+                WHERE lower(trim(first_name)) = $1
+                  AND lower(trim(last_name)) = $2
+                  AND birth_date = $3::date
+                  AND right(upper(replace(id::text, '-', '')), $4) = $5
+                LIMIT 2`,
+              [normalizedFirstName, normalizedLastName, data.birth_date, uniqueLength, normalizedUniqueId],
             );
-            return rows[0] ?? null;
+            if (rows.length !== 1) return null;
+            return rows[0];
           });
 
           if (!clientRecord || !clientRecord.firm_id) {
@@ -114,8 +155,8 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
           }
 
           const sameIdentity =
-            normalizeName(clientRecord.first_name) === normalizeName(data.first_name) &&
-            normalizeName(clientRecord.last_name) === normalizeName(data.last_name) &&
+            normalizeName(clientRecord.first_name) === normalizedFirstName &&
+            normalizeName(clientRecord.last_name) === normalizedLastName &&
             String(clientRecord.birth_date ?? "") === data.birth_date;
 
           if (!sameIdentity) {
