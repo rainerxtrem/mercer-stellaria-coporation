@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import seal from "@/assets/seal.png";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, MessageSquareShare } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -136,6 +136,18 @@ function AuthPage() {
                 Vous etes client ? Utilisez le{" "}
                 <Link to="/portail-client/auth" className="font-medium text-navy underline">portail client Discord</Link>.
               </p>
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-gold/40 text-gold hover:bg-gold hover:text-[#0a0e16]"
+                  onClick={() => {
+                    window.location.href = "/api/auth/discord/start?redirect_to=/portail-client";
+                  }}
+                >
+                  <MessageSquareShare className="mr-2 h-4 w-4" />Se connecter avec Discord (Client)
+                </Button>
+              </div>
             </div>
             <p className="mt-4 text-center text-xs text-muted-foreground">
               <Link to="/" className="hover:text-navy">← Retour au portail public</Link>

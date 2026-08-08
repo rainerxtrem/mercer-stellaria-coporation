@@ -27,8 +27,9 @@ function requiredEnv(name: string): string {
 export function getDiscordConfig() {
   const clientId = requiredEnv("DISCORD_CLIENT_ID");
   const clientSecret = requiredEnv("DISCORD_CLIENT_SECRET");
-  const guildId = requiredEnv("DISCORD_GUILD_ID");
-  const defaultRedirect = `${(process.env.PUBLIC_SITE_URL ?? "http://localhost:8080").replace(/\/$/, "")}/api/auth/discord/callback`;
+  const guildId = process.env.DISCORD_GUILD_ID?.trim() || null;
+  const baseUrl = (process.env.APP_BASE_URL ?? process.env.PUBLIC_SITE_URL ?? "http://localhost:8080").replace(/\/$/, "");
+  const defaultRedirect = `${baseUrl}/api/auth/discord/callback`;
   const redirectUri = (process.env.DISCORD_REDIRECT_URI ?? defaultRedirect).trim();
   const scopes = (process.env.DISCORD_OAUTH_SCOPES ?? "identify email guilds").trim();
 
@@ -92,6 +93,7 @@ export async function listDiscordGuilds(accessToken: string): Promise<DiscordGui
 
 export async function assertDiscordGuildMembership(accessToken: string): Promise<void> {
   const { guildId } = getDiscordConfig();
+  if (!guildId) return;
   const guilds = await listDiscordGuilds(accessToken);
   const inGuild = guilds.some((guild) => guild.id === guildId);
   if (!inGuild) {
