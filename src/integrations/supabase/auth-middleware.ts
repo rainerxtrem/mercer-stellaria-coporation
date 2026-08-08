@@ -41,9 +41,17 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
       throw new Error("Unauthorized: No user ID found in token");
     }
 
+    const activeFirmHeader = request.headers.get("x-enterprise-id")?.trim() ?? "";
+    const activeFirmId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activeFirmHeader)
+      ? activeFirmHeader
+      : null;
+
     const supabase = createServerClient({
       role: "authenticated",
-      claims: claims as unknown as Record<string, unknown>,
+      claims: {
+        ...(claims as unknown as Record<string, unknown>),
+        ...(activeFirmId ? { firm_id: activeFirmId } : {}),
+      },
     });
 
     return next({

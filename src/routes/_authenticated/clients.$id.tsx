@@ -1,12 +1,17 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/site/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getClient } from "@/lib/clients.functions";
 import { listInvoices } from "@/lib/invoices.functions";
+import { linkClientDiscord, setClientDiscordChannel, unlinkClientDiscord } from "@/lib/client-accounts.functions";
+import { toast } from "sonner";
 import { ArrowLeft, ExternalLink, Folder, FileSignature, Receipt, Mail, Phone } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/clients/$id")({
@@ -17,8 +22,12 @@ export const Route = createFileRoute("/_authenticated/clients/$id")({
 function Page() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const getClientFn = useServerFn(getClient);
   const listInvoicesFn = useServerFn(listInvoices);
+  const linkDiscordFn = useServerFn(linkClientDiscord);
+  const unlinkDiscordFn = useServerFn(unlinkClientDiscord);
+  const setChannelFn = useServerFn(setClientDiscordChannel);
 
   const clientQ = useQuery({ queryKey: ["client", id], queryFn: () => getClientFn({ data: { id } }) });
   const quotesQ = useQuery({ queryKey: ["invoices", "client", id, "quote"], queryFn: () => listInvoicesFn({ data: { client_id: id, kind: "quote" } }) });
@@ -26,6 +35,58 @@ function Page() {
 
   const c: any = clientQ.data?.client;
   const matters: any[] = clientQ.data?.matters ?? [];
+  const [discordUserId, setDiscordUserId] = useState("");
+  const [discordUsername, setDiscordUsername] = useState("");
+  const [discordChannelId, setDiscordChannelId] = useState("");
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState("");
+
+  useEffect(() => {
+    setDiscordUserId(c?.discord_user_id ?? "");
+    setDiscordUsername(c?.discord_username ?? "");
+    setDiscordChannelId(c?.discord_channel_id ?? "");
+    setDiscordWebhookUrl(c?.discord_webhook_url ?? "");
+  }, [c?.id, c?.discord_user_id, c?.discord_username, c?.discord_channel_id, c?.discord_webhook_url]);
+
+  const saveIdentity = useMutation({
+    mutationFn: () =>
+      linkDiscordFn({
+        data: {
+          client_id: id,
+          discord_user_id: discordUserId.trim(),
+          discord_username: discordUsername.trim() || null,
+        },
+      }),
+    onSuccess: async () => {
+      toast.success("Compte Discord lie");
+      await qc.invalidateQueries({ queryKey: ["client", id] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const saveChannel = useMutation({
+    mutationFn: () =>
+      setChannelFn({
+        data: {
+          client_id: id,
+          discord_channel_id: discordChannelId.trim() || null,
+          discord_webhook_url: discordWebhookUrl.trim() || null,
+        },
+      }),
+    onSuccess: async () => {
+      toast.success("Configuration Discord enregistree");
+      await qc.invalidateQueries({ queryKey: ["client", id] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const unlink = useMutation({
+    mutationFn: () => unlinkDiscordFn({ data: { client_id: id } }),
+    onSuccess: async () => {
+      toast.success("Liaison Discord retiree");
+      await qc.invalidateQueries({ queryKey: ["client", id] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   return (
     <>
@@ -50,6 +111,71 @@ function Page() {
               <div className="sm:col-span-2 text-xs text-muted-foreground">
                 Créé par {(c as any).owner_name ?? "—"}
                 {(c as any).updated_by_name ? ` · Dernière modification par ${(c as any).updated_by_name}` : ""}
+              </div>
+
+              <div className="sm:col-span-2 mt-3 rounded-lg border border-border bg-muted/35 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Portail client Discord</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="discord-user-id">Discord User ID</Label>
+                    <Input
+                      id="discord-user-id"
+                      value={discordUserId}
+                      onChange={(e) => setDiscordUserId(e.target.value)}
+                      placeholder="Ex: 123456789012345678"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="discord-username">Discord Username</Label>
+                    <Input
+                      id="discord-username"
+                      value={discordUsername}
+                      onChange={(e) => setDiscordUsername(e.target.value)}
+                      placeholder="Pseudo Discord"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="discord-channel-id">Discord Channel ID</Label>
+                    <Input
+                      id="discord-channel-id"
+                      value={discordChannelId}
+                      onChange={(e) => setDiscordChannelId(e.target.value)}
+                      placeholder="Canal prive client"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="discord-webhook-url">Discord Webhook URL</Label>
+                    <Input
+                      id="discord-webhook-url"
+                      value={discordWebhookUrl}
+                      onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                      placeholder="https://discord.com/api/webhooks/..."
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => saveIdentity.mutate()}
+                    disabled={!discordUserId.trim() || saveIdentity.isPending}
+                    className="bg-navy text-white hover:bg-navy-deep"
+                  >
+                    Lier le compte Discord
+                  </Button>
+                  <Button
+                    onClick={() => saveChannel.mutate()}
+                    disabled={saveChannel.isPending}
+                    variant="outline"
+                  >
+                    Enregistrer canal/webhook
+                  </Button>
+                  <Button
+                    onClick={() => unlink.mutate()}
+                    disabled={unlink.isPending}
+                    variant="destructive"
+                  >
+                    Delier Discord
+                  </Button>
+                </div>
               </div>
 
             </CardContent>

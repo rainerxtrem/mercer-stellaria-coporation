@@ -32,8 +32,18 @@ export async function requestAuthContext(request: Request): Promise<DbAuthContex
 
   try {
     const { verifyAccessToken } = await import("@/backend/auth/jwt");
-    const claims = await verifyAccessToken(token);
-    return { role: "authenticated", claims: claims as unknown as Record<string, unknown> };
+    const claims = (await verifyAccessToken(token)) as unknown as Record<string, unknown>;
+    const activeFirmHeader = request.headers.get("x-enterprise-id")?.trim() ?? "";
+    const activeFirmId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activeFirmHeader)
+      ? activeFirmHeader
+      : null;
+    return {
+      role: "authenticated",
+      claims: {
+        ...claims,
+        ...(activeFirmId ? { firm_id: activeFirmId } : {}),
+      },
+    };
   } catch {
     return { role: "anon", claims: null };
   }

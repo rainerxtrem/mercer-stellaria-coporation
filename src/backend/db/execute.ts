@@ -81,6 +81,20 @@ export async function executeSpec(
     const compiled = compile(spec, catalog);
 
     const { rows, count } = await withSession(auth, async (client) => {
+      if (auth.role === "authenticated") {
+        const targetKind = spec.kind === "rpc" ? "rpc" : "table";
+        const targetName = spec.kind === "rpc" ? `${spec.schema}.${spec.fn}` : `${spec.schema}.${spec.table}`;
+        const guard = await client.query<{ allowed: boolean }>(
+          "SELECT app_private.can_access_api_target($1, $2) AS allowed",
+          [targetKind, targetName],
+        );
+        if (!guard.rows[0]?.allowed) {
+          const error = new Error("Module désactivé ou accès entreprise non autorisé.") as Error & { code?: string };
+          error.code = "42501";
+          throw error;
+        }
+      }
+
       const main = await client.query(compiled.text, compiled.params as unknown[]);
       let total: number | null = null;
       if (compiled.countText) {

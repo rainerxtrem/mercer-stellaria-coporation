@@ -113,6 +113,16 @@ async function findUserById(id: string): Promise<UserRow | null> {
   });
 }
 
+async function listUserRoles(userId: string): Promise<string[]> {
+  return withSession(SERVICE, async (client) => {
+    const { rows } = await client.query<{ role: string }>(
+      `SELECT role::text FROM public.user_roles WHERE user_id = $1`,
+      [userId],
+    );
+    return rows.map((row) => row.role);
+  });
+}
+
 async function issueSession(user: UserRow): Promise<AuthSession> {
   const sessionId = crypto.randomUUID();
   const refreshToken = generateOpaqueToken();
@@ -156,6 +166,16 @@ export async function signInWithPassword(email: string, password: string): Promi
   if (!user || !user.encrypted_password || !matches) {
     throw new AuthError("Invalid login credentials", 400, "invalid_credentials");
   }
+
+  const roles = await listUserRoles(user.id);
+  if (roles.includes("client")) {
+    throw new AuthError(
+      "Client accounts must sign in through Discord.",
+      403,
+      "discord_oauth_required",
+    );
+  }
+
   if (user.banned_until && new Date(user.banned_until) > new Date()) {
     throw new AuthError("User is banned", 403, "user_banned");
   }
@@ -163,6 +183,15 @@ export async function signInWithPassword(email: string, password: string): Promi
     throw new AuthError("Email not confirmed", 400, "email_not_confirmed");
   }
 
+  return issueSession(user);
+}
+
+export async function issueSessionForUserId(userId: string): Promise<AuthSession> {
+  const user = await findUserById(userId);
+  if (!user) throw new AuthError("User not found", 404, "user_not_found");
+  if (user.banned_until && new Date(user.banned_until) > new Date()) {
+    throw new AuthError("User is banned", 403, "user_banned");
+  }
   return issueSession(user);
 }
 

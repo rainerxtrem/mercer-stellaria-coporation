@@ -6,6 +6,7 @@ import type { useNavigate } from "@tanstack/react-router";
 export type AppRole =
   | "batonnier"
   | "avocat"
+  | "client"
   | "citoyen"
   | "assistant"
   | "responsable_cabinet"
@@ -15,6 +16,7 @@ export type AppRole =
 export const ALL_APP_ROLES: AppRole[] = [
   "batonnier",
   "avocat",
+  "client",
   "responsable_cabinet",
   "assistant",
   "formateur",
@@ -25,6 +27,7 @@ export const ALL_APP_ROLES: AppRole[] = [
 export const ROLE_LABELS: Record<AppRole, string> = {
   batonnier: "CEO",
   avocat: "Lawyer",
+  client: "Client Portal",
   responsable_cabinet: "Managing Partner",
   assistant: "Paralegal",
   formateur: "Training Director",

@@ -106,6 +106,7 @@ const APP_SHELL_PREFIXES = [
   "/dossiers",
   "/clients",
   "/facturation",
+  "/portail-client",
 ];
 
 function useIsAppShellRoute() {

@@ -24,6 +24,7 @@ import { Route as EspaceBatonnierRouteImport } from './routes/espace-batonnier'
 import { Route as ExamenRouteImport } from './routes/examen'
 import { Route as FormationsRouteImport } from './routes/formations'
 import { Route as LeBarreauRouteImport } from './routes/le-barreau'
+import { Route as PortailClientRouteImport } from './routes/portail-client'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SignalementRouteImport } from './routes/signalement'
@@ -38,6 +39,13 @@ import { Route as AuthenticatedTachesRouteImport } from './routes/_authenticated
 import { Route as ApiDbRouteImport } from './routes/api/db'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AvocatsIdRouteImport } from './routes/avocats.$id'
+import { Route as PortailClientIndexRouteImport } from './routes/portail-client.index'
+import { Route as PortailClientAuthRouteImport } from './routes/portail-client.auth'
+import { Route as PortailClientDocumentsRouteImport } from './routes/portail-client.documents'
+import { Route as PortailClientDossiersRouteImport } from './routes/portail-client.dossiers'
+import { Route as PortailClientMessagesRouteImport } from './routes/portail-client.messages'
+import { Route as PortailClientNotificationsRouteImport } from './routes/portail-client.notifications'
+import { Route as PortailClientSignaturesRouteImport } from './routes/portail-client.signatures'
 import { Route as SignatureTokenRouteImport } from './routes/signature.$token'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminActualitesRouteImport } from './routes/_authenticated/admin.actualites'
@@ -47,6 +55,7 @@ import { Route as AuthenticatedAdminCabinetsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminContenusRouteImport } from './routes/_authenticated/admin.contenus'
 import { Route as AuthenticatedAdminDemandesRouteImport } from './routes/_authenticated/admin.demandes'
 import { Route as AuthenticatedAdminDisciplineRouteImport } from './routes/_authenticated/admin.discipline'
+import { Route as AuthenticatedAdminEnterprisesRouteImport } from './routes/_authenticated/admin.enterprises'
 import { Route as AuthenticatedAdminJournalRouteImport } from './routes/_authenticated/admin.journal'
 import { Route as AuthenticatedAdminRolesRouteImport } from './routes/_authenticated/admin.roles'
 import { Route as AuthenticatedAdminSauvegardesRouteImport } from './routes/_authenticated/admin.sauvegardes'
@@ -69,6 +78,7 @@ import { Route as ApiAuthActionRouteImport } from './routes/api/auth.$action'
 import { Route as ApiStorageObjectRouteImport } from './routes/api/storage.object'
 import { Route as ApiStorageOpRouteImport } from './routes/api/storage.op'
 import { Route as ApiStorageUploadRouteImport } from './routes/api/storage.upload'
+import { Route as PortailClientDossiersMatterIdRouteImport } from './routes/portail-client.dossiers.$matterId'
 import { Route as VerificationFactureTokenRouteImport } from './routes/verification.facture.$token'
 import { Route as AuthenticatedAdminDisciplineCaseIdRouteImport } from './routes/_authenticated/admin.discipline.$caseId'
 import { Route as AuthenticatedAdminExamensIndexRouteImport } from './routes/_authenticated/admin.examens.index'
@@ -76,6 +86,8 @@ import { Route as AuthenticatedAdminExamensIdRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminFormationsIndexRouteImport } from './routes/_authenticated/admin.formations.index'
 import { Route as AuthenticatedAdminFormationsIdRouteImport } from './routes/_authenticated/admin.formations.$id'
 import { Route as AuthenticatedExamensIdPassageRouteImport } from './routes/_authenticated/examens.$id.passage'
+import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth.discord.callback'
+import { Route as ApiAuthDiscordStartRouteImport } from './routes/api/auth.discord.start'
 import { Route as AuthenticatedExamensIdResultatAttemptIdRouteImport } from './routes/_authenticated/examens.$id.resultat.$attemptId'
 import { Route as AuthenticatedAdminExamensIdCopiesAttemptIdRouteImport } from './routes/_authenticated/admin.examens.$id.copies.$attemptId'
 
@@ -153,6 +165,11 @@ const LeBarreauRoute = LeBarreauRouteImport.update({
   path: '/le-barreau',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortailClientRoute = PortailClientRouteImport.update({
+  id: '/portail-client',
+  path: '/portail-client',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -226,6 +243,42 @@ const AvocatsIdRoute = AvocatsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AvocatsRoute,
 } as any)
+const PortailClientIndexRoute = PortailClientIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PortailClientRoute,
+} as any)
+const PortailClientAuthRoute = PortailClientAuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => PortailClientRoute,
+} as any)
+const PortailClientDocumentsRoute = PortailClientDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => PortailClientRoute,
+} as any)
+const PortailClientDossiersRoute = PortailClientDossiersRouteImport.update({
+  id: '/dossiers',
+  path: '/dossiers',
+  getParentRoute: () => PortailClientRoute,
+} as any)
+const PortailClientMessagesRoute = PortailClientMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => PortailClientRoute,
+} as any)
+const PortailClientNotificationsRoute =
+  PortailClientNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => PortailClientRoute,
+  } as any)
+const PortailClientSignaturesRoute = PortailClientSignaturesRouteImport.update({
+  id: '/signatures',
+  path: '/signatures',
+  getParentRoute: () => PortailClientRoute,
+} as any)
 const SignatureTokenRoute = SignatureTokenRouteImport.update({
   id: '/signature/$token',
   path: '/signature/$token',
@@ -276,6 +329,12 @@ const AuthenticatedAdminDisciplineRoute =
   AuthenticatedAdminDisciplineRouteImport.update({
     id: '/discipline',
     path: '/discipline',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminEnterprisesRoute =
+  AuthenticatedAdminEnterprisesRouteImport.update({
+    id: '/enterprises',
+    path: '/enterprises',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminJournalRoute =
@@ -404,6 +463,12 @@ const ApiStorageUploadRoute = ApiStorageUploadRouteImport.update({
   path: '/api/storage/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortailClientDossiersMatterIdRoute =
+  PortailClientDossiersMatterIdRouteImport.update({
+    id: '/$matterId',
+    path: '/$matterId',
+    getParentRoute: () => PortailClientDossiersRoute,
+  } as any)
 const VerificationFactureTokenRoute =
   VerificationFactureTokenRouteImport.update({
     id: '/facture/$token',
@@ -446,6 +511,16 @@ const AuthenticatedExamensIdPassageRoute =
     path: '/examens/$id/passage',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiAuthDiscordCallbackRoute = ApiAuthDiscordCallbackRouteImport.update({
+  id: '/api/auth/discord/callback',
+  path: '/api/auth/discord/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthDiscordStartRoute = ApiAuthDiscordStartRouteImport.update({
+  id: '/api/auth/discord/start',
+  path: '/api/auth/discord/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedExamensIdResultatAttemptIdRoute =
   AuthenticatedExamensIdResultatAttemptIdRouteImport.update({
     id: '/examens/$id/resultat/$attemptId',
@@ -474,6 +549,7 @@ export interface FileRoutesByFullPath {
   '/examen': typeof ExamenRoute
   '/formations': typeof FormationsRoute
   '/le-barreau': typeof LeBarreauRoute
+  '/portail-client': typeof PortailClientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
   '/signalement': typeof SignalementRoute
@@ -488,7 +564,14 @@ export interface FileRoutesByFullPath {
   '/api/db': typeof ApiDbRoute
   '/api/health': typeof ApiHealthRoute
   '/avocats/$id': typeof AvocatsIdRoute
+  '/portail-client/auth': typeof PortailClientAuthRoute
+  '/portail-client/documents': typeof PortailClientDocumentsRoute
+  '/portail-client/dossiers': typeof PortailClientDossiersRouteWithChildren
+  '/portail-client/messages': typeof PortailClientMessagesRoute
+  '/portail-client/notifications': typeof PortailClientNotificationsRoute
+  '/portail-client/signatures': typeof PortailClientSignaturesRoute
   '/signature/$token': typeof SignatureTokenRoute
+  '/portail-client/': typeof PortailClientIndexRoute
   '/admin/actualites': typeof AuthenticatedAdminActualitesRoute
   '/admin/avocats': typeof AuthenticatedAdminAvocatsRoute
   '/admin/bibliotheque': typeof AuthenticatedAdminBibliothequeRoute
@@ -496,6 +579,7 @@ export interface FileRoutesByFullPath {
   '/admin/contenus': typeof AuthenticatedAdminContenusRoute
   '/admin/demandes': typeof AuthenticatedAdminDemandesRoute
   '/admin/discipline': typeof AuthenticatedAdminDisciplineRouteWithChildren
+  '/admin/enterprises': typeof AuthenticatedAdminEnterprisesRoute
   '/admin/journal': typeof AuthenticatedAdminJournalRoute
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/sauvegardes': typeof AuthenticatedAdminSauvegardesRoute
@@ -514,6 +598,7 @@ export interface FileRoutesByFullPath {
   '/api/storage/object': typeof ApiStorageObjectRoute
   '/api/storage/op': typeof ApiStorageOpRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/portail-client/dossiers/$matterId': typeof PortailClientDossiersMatterIdRoute
   '/verification/facture/$token': typeof VerificationFactureTokenRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/cabinet/': typeof AuthenticatedCabinetIndexRoute
@@ -524,6 +609,8 @@ export interface FileRoutesByFullPath {
   '/admin/examens/$id': typeof AuthenticatedAdminExamensIdRouteWithChildren
   '/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
+  '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
+  '/api/auth/discord/start': typeof ApiAuthDiscordStartRoute
   '/admin/examens/': typeof AuthenticatedAdminExamensIndexRoute
   '/admin/formations/': typeof AuthenticatedAdminFormationsIndexRoute
   '/examens/$id/resultat/$attemptId': typeof AuthenticatedExamensIdResultatAttemptIdRoute
@@ -557,7 +644,14 @@ export interface FileRoutesByTo {
   '/api/db': typeof ApiDbRoute
   '/api/health': typeof ApiHealthRoute
   '/avocats/$id': typeof AvocatsIdRoute
+  '/portail-client/auth': typeof PortailClientAuthRoute
+  '/portail-client/documents': typeof PortailClientDocumentsRoute
+  '/portail-client/dossiers': typeof PortailClientDossiersRouteWithChildren
+  '/portail-client/messages': typeof PortailClientMessagesRoute
+  '/portail-client/notifications': typeof PortailClientNotificationsRoute
+  '/portail-client/signatures': typeof PortailClientSignaturesRoute
   '/signature/$token': typeof SignatureTokenRoute
+  '/portail-client': typeof PortailClientIndexRoute
   '/admin/actualites': typeof AuthenticatedAdminActualitesRoute
   '/admin/avocats': typeof AuthenticatedAdminAvocatsRoute
   '/admin/bibliotheque': typeof AuthenticatedAdminBibliothequeRoute
@@ -565,6 +659,7 @@ export interface FileRoutesByTo {
   '/admin/contenus': typeof AuthenticatedAdminContenusRoute
   '/admin/demandes': typeof AuthenticatedAdminDemandesRoute
   '/admin/discipline': typeof AuthenticatedAdminDisciplineRouteWithChildren
+  '/admin/enterprises': typeof AuthenticatedAdminEnterprisesRoute
   '/admin/journal': typeof AuthenticatedAdminJournalRoute
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/sauvegardes': typeof AuthenticatedAdminSauvegardesRoute
@@ -583,6 +678,7 @@ export interface FileRoutesByTo {
   '/api/storage/object': typeof ApiStorageObjectRoute
   '/api/storage/op': typeof ApiStorageOpRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/portail-client/dossiers/$matterId': typeof PortailClientDossiersMatterIdRoute
   '/verification/facture/$token': typeof VerificationFactureTokenRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/cabinet': typeof AuthenticatedCabinetIndexRoute
@@ -593,6 +689,8 @@ export interface FileRoutesByTo {
   '/admin/examens/$id': typeof AuthenticatedAdminExamensIdRouteWithChildren
   '/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
+  '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
+  '/api/auth/discord/start': typeof ApiAuthDiscordStartRoute
   '/admin/examens': typeof AuthenticatedAdminExamensIndexRoute
   '/admin/formations': typeof AuthenticatedAdminFormationsIndexRoute
   '/examens/$id/resultat/$attemptId': typeof AuthenticatedExamensIdResultatAttemptIdRoute
@@ -615,6 +713,7 @@ export interface FileRoutesById {
   '/examen': typeof ExamenRoute
   '/formations': typeof FormationsRoute
   '/le-barreau': typeof LeBarreauRoute
+  '/portail-client': typeof PortailClientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
   '/signalement': typeof SignalementRoute
@@ -629,7 +728,14 @@ export interface FileRoutesById {
   '/api/db': typeof ApiDbRoute
   '/api/health': typeof ApiHealthRoute
   '/avocats/$id': typeof AvocatsIdRoute
+  '/portail-client/auth': typeof PortailClientAuthRoute
+  '/portail-client/documents': typeof PortailClientDocumentsRoute
+  '/portail-client/dossiers': typeof PortailClientDossiersRouteWithChildren
+  '/portail-client/messages': typeof PortailClientMessagesRoute
+  '/portail-client/notifications': typeof PortailClientNotificationsRoute
+  '/portail-client/signatures': typeof PortailClientSignaturesRoute
   '/signature/$token': typeof SignatureTokenRoute
+  '/portail-client/': typeof PortailClientIndexRoute
   '/_authenticated/admin/actualites': typeof AuthenticatedAdminActualitesRoute
   '/_authenticated/admin/avocats': typeof AuthenticatedAdminAvocatsRoute
   '/_authenticated/admin/bibliotheque': typeof AuthenticatedAdminBibliothequeRoute
@@ -637,6 +743,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/contenus': typeof AuthenticatedAdminContenusRoute
   '/_authenticated/admin/demandes': typeof AuthenticatedAdminDemandesRoute
   '/_authenticated/admin/discipline': typeof AuthenticatedAdminDisciplineRouteWithChildren
+  '/_authenticated/admin/enterprises': typeof AuthenticatedAdminEnterprisesRoute
   '/_authenticated/admin/journal': typeof AuthenticatedAdminJournalRoute
   '/_authenticated/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/_authenticated/admin/sauvegardes': typeof AuthenticatedAdminSauvegardesRoute
@@ -655,6 +762,7 @@ export interface FileRoutesById {
   '/api/storage/object': typeof ApiStorageObjectRoute
   '/api/storage/op': typeof ApiStorageOpRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/portail-client/dossiers/$matterId': typeof PortailClientDossiersMatterIdRoute
   '/verification/facture/$token': typeof VerificationFactureTokenRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/cabinet/': typeof AuthenticatedCabinetIndexRoute
@@ -665,6 +773,8 @@ export interface FileRoutesById {
   '/_authenticated/admin/examens/$id': typeof AuthenticatedAdminExamensIdRouteWithChildren
   '/_authenticated/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/_authenticated/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
+  '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
+  '/api/auth/discord/start': typeof ApiAuthDiscordStartRoute
   '/_authenticated/admin/examens/': typeof AuthenticatedAdminExamensIndexRoute
   '/_authenticated/admin/formations/': typeof AuthenticatedAdminFormationsIndexRoute
   '/_authenticated/examens/$id/resultat/$attemptId': typeof AuthenticatedExamensIdResultatAttemptIdRoute
@@ -687,6 +797,7 @@ export interface FileRouteTypes {
     | '/examen'
     | '/formations'
     | '/le-barreau'
+    | '/portail-client'
     | '/reset-password'
     | '/services'
     | '/signalement'
@@ -701,7 +812,14 @@ export interface FileRouteTypes {
     | '/api/db'
     | '/api/health'
     | '/avocats/$id'
+    | '/portail-client/auth'
+    | '/portail-client/documents'
+    | '/portail-client/dossiers'
+    | '/portail-client/messages'
+    | '/portail-client/notifications'
+    | '/portail-client/signatures'
     | '/signature/$token'
+    | '/portail-client/'
     | '/admin/actualites'
     | '/admin/avocats'
     | '/admin/bibliotheque'
@@ -709,6 +827,7 @@ export interface FileRouteTypes {
     | '/admin/contenus'
     | '/admin/demandes'
     | '/admin/discipline'
+    | '/admin/enterprises'
     | '/admin/journal'
     | '/admin/roles'
     | '/admin/sauvegardes'
@@ -727,6 +846,7 @@ export interface FileRouteTypes {
     | '/api/storage/object'
     | '/api/storage/op'
     | '/api/storage/upload'
+    | '/portail-client/dossiers/$matterId'
     | '/verification/facture/$token'
     | '/admin/'
     | '/cabinet/'
@@ -737,6 +857,8 @@ export interface FileRouteTypes {
     | '/admin/examens/$id'
     | '/admin/formations/$id'
     | '/examens/$id/passage'
+    | '/api/auth/discord/callback'
+    | '/api/auth/discord/start'
     | '/admin/examens/'
     | '/admin/formations/'
     | '/examens/$id/resultat/$attemptId'
@@ -770,7 +892,14 @@ export interface FileRouteTypes {
     | '/api/db'
     | '/api/health'
     | '/avocats/$id'
+    | '/portail-client/auth'
+    | '/portail-client/documents'
+    | '/portail-client/dossiers'
+    | '/portail-client/messages'
+    | '/portail-client/notifications'
+    | '/portail-client/signatures'
     | '/signature/$token'
+    | '/portail-client'
     | '/admin/actualites'
     | '/admin/avocats'
     | '/admin/bibliotheque'
@@ -778,6 +907,7 @@ export interface FileRouteTypes {
     | '/admin/contenus'
     | '/admin/demandes'
     | '/admin/discipline'
+    | '/admin/enterprises'
     | '/admin/journal'
     | '/admin/roles'
     | '/admin/sauvegardes'
@@ -796,6 +926,7 @@ export interface FileRouteTypes {
     | '/api/storage/object'
     | '/api/storage/op'
     | '/api/storage/upload'
+    | '/portail-client/dossiers/$matterId'
     | '/verification/facture/$token'
     | '/admin'
     | '/cabinet'
@@ -806,6 +937,8 @@ export interface FileRouteTypes {
     | '/admin/examens/$id'
     | '/admin/formations/$id'
     | '/examens/$id/passage'
+    | '/api/auth/discord/callback'
+    | '/api/auth/discord/start'
     | '/admin/examens'
     | '/admin/formations'
     | '/examens/$id/resultat/$attemptId'
@@ -827,6 +960,7 @@ export interface FileRouteTypes {
     | '/examen'
     | '/formations'
     | '/le-barreau'
+    | '/portail-client'
     | '/reset-password'
     | '/services'
     | '/signalement'
@@ -841,7 +975,14 @@ export interface FileRouteTypes {
     | '/api/db'
     | '/api/health'
     | '/avocats/$id'
+    | '/portail-client/auth'
+    | '/portail-client/documents'
+    | '/portail-client/dossiers'
+    | '/portail-client/messages'
+    | '/portail-client/notifications'
+    | '/portail-client/signatures'
     | '/signature/$token'
+    | '/portail-client/'
     | '/_authenticated/admin/actualites'
     | '/_authenticated/admin/avocats'
     | '/_authenticated/admin/bibliotheque'
@@ -849,6 +990,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/contenus'
     | '/_authenticated/admin/demandes'
     | '/_authenticated/admin/discipline'
+    | '/_authenticated/admin/enterprises'
     | '/_authenticated/admin/journal'
     | '/_authenticated/admin/roles'
     | '/_authenticated/admin/sauvegardes'
@@ -867,6 +1009,7 @@ export interface FileRouteTypes {
     | '/api/storage/object'
     | '/api/storage/op'
     | '/api/storage/upload'
+    | '/portail-client/dossiers/$matterId'
     | '/verification/facture/$token'
     | '/_authenticated/admin/'
     | '/_authenticated/cabinet/'
@@ -877,6 +1020,8 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/examens/$id'
     | '/_authenticated/admin/formations/$id'
     | '/_authenticated/examens/$id/passage'
+    | '/api/auth/discord/callback'
+    | '/api/auth/discord/start'
     | '/_authenticated/admin/examens/'
     | '/_authenticated/admin/formations/'
     | '/_authenticated/examens/$id/resultat/$attemptId'
@@ -899,6 +1044,7 @@ export interface RootRouteChildren {
   ExamenRoute: typeof ExamenRoute
   FormationsRoute: typeof FormationsRoute
   LeBarreauRoute: typeof LeBarreauRoute
+  PortailClientRoute: typeof PortailClientRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   ServicesRoute: typeof ServicesRoute
   SignalementRoute: typeof SignalementRoute
@@ -910,6 +1056,8 @@ export interface RootRouteChildren {
   ApiStorageObjectRoute: typeof ApiStorageObjectRoute
   ApiStorageOpRoute: typeof ApiStorageOpRoute
   ApiStorageUploadRoute: typeof ApiStorageUploadRoute
+  ApiAuthDiscordCallbackRoute: typeof ApiAuthDiscordCallbackRoute
+  ApiAuthDiscordStartRoute: typeof ApiAuthDiscordStartRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1019,6 +1167,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LeBarreauRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/portail-client': {
+      id: '/portail-client'
+      path: '/portail-client'
+      fullPath: '/portail-client'
+      preLoaderRoute: typeof PortailClientRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -1117,6 +1272,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AvocatsIdRouteImport
       parentRoute: typeof AvocatsRoute
     }
+    '/portail-client/': {
+      id: '/portail-client/'
+      path: '/'
+      fullPath: '/portail-client/'
+      preLoaderRoute: typeof PortailClientIndexRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
+    '/portail-client/auth': {
+      id: '/portail-client/auth'
+      path: '/auth'
+      fullPath: '/portail-client/auth'
+      preLoaderRoute: typeof PortailClientAuthRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
+    '/portail-client/documents': {
+      id: '/portail-client/documents'
+      path: '/documents'
+      fullPath: '/portail-client/documents'
+      preLoaderRoute: typeof PortailClientDocumentsRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
+    '/portail-client/dossiers': {
+      id: '/portail-client/dossiers'
+      path: '/dossiers'
+      fullPath: '/portail-client/dossiers'
+      preLoaderRoute: typeof PortailClientDossiersRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
+    '/portail-client/messages': {
+      id: '/portail-client/messages'
+      path: '/messages'
+      fullPath: '/portail-client/messages'
+      preLoaderRoute: typeof PortailClientMessagesRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
+    '/portail-client/notifications': {
+      id: '/portail-client/notifications'
+      path: '/notifications'
+      fullPath: '/portail-client/notifications'
+      preLoaderRoute: typeof PortailClientNotificationsRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
+    '/portail-client/signatures': {
+      id: '/portail-client/signatures'
+      path: '/signatures'
+      fullPath: '/portail-client/signatures'
+      preLoaderRoute: typeof PortailClientSignaturesRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
     '/signature/$token': {
       id: '/signature/$token'
       path: '/signature/$token'
@@ -1178,6 +1382,13 @@ declare module '@tanstack/react-router' {
       path: '/discipline'
       fullPath: '/admin/discipline'
       preLoaderRoute: typeof AuthenticatedAdminDisciplineRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/enterprises': {
+      id: '/_authenticated/admin/enterprises'
+      path: '/enterprises'
+      fullPath: '/admin/enterprises'
+      preLoaderRoute: typeof AuthenticatedAdminEnterprisesRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/journal': {
@@ -1334,6 +1545,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStorageUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/portail-client/dossiers/$matterId': {
+      id: '/portail-client/dossiers/$matterId'
+      path: '/$matterId'
+      fullPath: '/portail-client/dossiers/$matterId'
+      preLoaderRoute: typeof PortailClientDossiersMatterIdRouteImport
+      parentRoute: typeof PortailClientDossiersRoute
+    }
     '/verification/facture/$token': {
       id: '/verification/facture/$token'
       path: '/facture/$token'
@@ -1382,6 +1600,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/examens/$id/passage'
       preLoaderRoute: typeof AuthenticatedExamensIdPassageRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/auth/discord/callback': {
+      id: '/api/auth/discord/callback'
+      path: '/api/auth/discord/callback'
+      fullPath: '/api/auth/discord/callback'
+      preLoaderRoute: typeof ApiAuthDiscordCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/discord/start': {
+      id: '/api/auth/discord/start'
+      path: '/api/auth/discord/start'
+      fullPath: '/api/auth/discord/start'
+      preLoaderRoute: typeof ApiAuthDiscordStartRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/examens/$id/resultat/$attemptId': {
       id: '/_authenticated/examens/$id/resultat/$attemptId'
@@ -1438,6 +1670,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminContenusRoute: typeof AuthenticatedAdminContenusRoute
   AuthenticatedAdminDemandesRoute: typeof AuthenticatedAdminDemandesRoute
   AuthenticatedAdminDisciplineRoute: typeof AuthenticatedAdminDisciplineRouteWithChildren
+  AuthenticatedAdminEnterprisesRoute: typeof AuthenticatedAdminEnterprisesRoute
   AuthenticatedAdminJournalRoute: typeof AuthenticatedAdminJournalRoute
   AuthenticatedAdminRolesRoute: typeof AuthenticatedAdminRolesRoute
   AuthenticatedAdminSauvegardesRoute: typeof AuthenticatedAdminSauvegardesRoute
@@ -1457,6 +1690,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDemandesRoute: AuthenticatedAdminDemandesRoute,
   AuthenticatedAdminDisciplineRoute:
     AuthenticatedAdminDisciplineRouteWithChildren,
+  AuthenticatedAdminEnterprisesRoute: AuthenticatedAdminEnterprisesRoute,
   AuthenticatedAdminJournalRoute: AuthenticatedAdminJournalRoute,
   AuthenticatedAdminRolesRoute: AuthenticatedAdminRolesRoute,
   AuthenticatedAdminSauvegardesRoute: AuthenticatedAdminSauvegardesRoute,
@@ -1551,6 +1785,43 @@ const AvocatsRouteChildren: AvocatsRouteChildren = {
 const AvocatsRouteWithChildren =
   AvocatsRoute._addFileChildren(AvocatsRouteChildren)
 
+interface PortailClientDossiersRouteChildren {
+  PortailClientDossiersMatterIdRoute: typeof PortailClientDossiersMatterIdRoute
+}
+
+const PortailClientDossiersRouteChildren: PortailClientDossiersRouteChildren = {
+  PortailClientDossiersMatterIdRoute: PortailClientDossiersMatterIdRoute,
+}
+
+const PortailClientDossiersRouteWithChildren =
+  PortailClientDossiersRoute._addFileChildren(
+    PortailClientDossiersRouteChildren,
+  )
+
+interface PortailClientRouteChildren {
+  PortailClientAuthRoute: typeof PortailClientAuthRoute
+  PortailClientDocumentsRoute: typeof PortailClientDocumentsRoute
+  PortailClientDossiersRoute: typeof PortailClientDossiersRouteWithChildren
+  PortailClientMessagesRoute: typeof PortailClientMessagesRoute
+  PortailClientNotificationsRoute: typeof PortailClientNotificationsRoute
+  PortailClientSignaturesRoute: typeof PortailClientSignaturesRoute
+  PortailClientIndexRoute: typeof PortailClientIndexRoute
+}
+
+const PortailClientRouteChildren: PortailClientRouteChildren = {
+  PortailClientAuthRoute: PortailClientAuthRoute,
+  PortailClientDocumentsRoute: PortailClientDocumentsRoute,
+  PortailClientDossiersRoute: PortailClientDossiersRouteWithChildren,
+  PortailClientMessagesRoute: PortailClientMessagesRoute,
+  PortailClientNotificationsRoute: PortailClientNotificationsRoute,
+  PortailClientSignaturesRoute: PortailClientSignaturesRoute,
+  PortailClientIndexRoute: PortailClientIndexRoute,
+}
+
+const PortailClientRouteWithChildren = PortailClientRoute._addFileChildren(
+  PortailClientRouteChildren,
+)
+
 interface VerificationRouteChildren {
   VerificationFactureTokenRoute: typeof VerificationFactureTokenRoute
 }
@@ -1579,6 +1850,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExamenRoute: ExamenRoute,
   FormationsRoute: FormationsRoute,
   LeBarreauRoute: LeBarreauRoute,
+  PortailClientRoute: PortailClientRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   ServicesRoute: ServicesRoute,
   SignalementRoute: SignalementRoute,
@@ -1590,6 +1862,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiStorageObjectRoute: ApiStorageObjectRoute,
   ApiStorageOpRoute: ApiStorageOpRoute,
   ApiStorageUploadRoute: ApiStorageUploadRoute,
+  ApiAuthDiscordCallbackRoute: ApiAuthDiscordCallbackRoute,
+  ApiAuthDiscordStartRoute: ApiAuthDiscordStartRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

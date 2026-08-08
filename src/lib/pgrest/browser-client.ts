@@ -1,14 +1,17 @@
 import { createRpcBuilder, TableBuilder } from "./builder";
 import type { PostgrestResponse, RequestSpec } from "./types";
 import type { BrowserAuthClient } from "./auth-client";
+import { readActiveFirmId } from "@/lib/enterprise";
 
 /** Data + storage transport used by the browser, authenticated with the session bearer token. */
 export function createBrowserTransport(auth: BrowserAuthClient) {
   async function authHeaders(): Promise<Record<string, string>> {
     const token = await auth.getAccessToken();
+    const activeFirmId = readActiveFirmId();
     return {
       "content-type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeFirmId ? { "x-enterprise-id": activeFirmId } : {}),
     };
   }
 

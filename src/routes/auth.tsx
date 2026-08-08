@@ -29,6 +29,9 @@ function getAuthErrorMessage(message: string) {
   if (message === "Invalid login credentials") {
     return "Identifiants invalides. Vérifiez votre adresse e-mail et votre mot de passe, ou utilisez le lien de réinitialisation.";
   }
+  if (message === "discord_oauth_required") {
+    return "Les comptes clients se connectent uniquement via Discord dans le portail client isole.";
+  }
   return message;
 }
 
@@ -128,6 +131,10 @@ function AuthPage() {
                   les comptes clients par leur cabinet. Pour toute demande, utilisez le{" "}
                   <Link to="/contact" className="font-medium text-navy underline">formulaire de contact</Link>.
                 </span>
+              </p>
+              <p className="mt-2">
+                Vous etes client ? Utilisez le{" "}
+                <Link to="/portail-client/auth" className="font-medium text-navy underline">portail client Discord</Link>.
               </p>
             </div>
             <p className="mt-4 text-center text-xs text-muted-foreground">

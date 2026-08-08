@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const createSchema = z.object({
   email: z.string().trim().toLowerCase().email("Adresse e-mail invalide").max(255),
-  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères").max(128),
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères").max(128).optional(),
   first_name: z.string().trim().min(1, "Le prénom est requis").max(80),
   last_name: z.string().trim().min(1, "Le nom est requis").max(80),
   company: z.string().trim().max(150).nullable().optional(),
@@ -32,6 +32,8 @@ export const createClientAccount = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => createSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { firmId } = await requireFirmManager(context);
+    const generatedPassword = crypto.randomUUID().replace(/-/g, "") + "A!9";
+    const password = data.password ?? generatedPassword;
 
     // Les dossiers à rattacher doivent être accessibles à l'appelant (RLS).
     let matterIds: string[] = [];
@@ -48,7 +50,7 @@ export const createClientAccount = createServerFn({ method: "POST" })
 
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
-      password: data.password,
+      password,
       email_confirm: true,
       user_metadata: { full_name },
     });
@@ -124,6 +126,69 @@ export const createClientAccount = createServerFn({ method: "POST" })
     });
 
     return { ok: true, client_id: client!.id, user_id: userId };
+  });
+
+export const linkClientDiscord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { client_id: string; discord_user_id: string; discord_username?: string | null }) => ({
+    client_id: z.string().uuid().parse(d.client_id),
+    discord_user_id: z.string().regex(/^[0-9]{15,25}$/).parse(d.discord_user_id),
+    discord_username: z.string().trim().max(120).nullable().optional().parse(d.discord_username ?? null),
+  }))
+  .handler(async ({ data, context }) => {
+    await requireFirmManager(context);
+    const { error } = await context.supabase
+      .from("clients")
+      .update({
+        discord_user_id: data.discord_user_id,
+        discord_username: data.discord_username,
+      })
+      .eq("id", data.client_id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const unlinkClientDiscord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { client_id: string }) => ({ client_id: z.string().uuid().parse(d.client_id) }))
+  .handler(async ({ data, context }) => {
+    await requireFirmManager(context);
+    const { error } = await context.supabase
+      .from("clients")
+      .update({
+        discord_user_id: null,
+        discord_username: null,
+        discord_channel_id: null,
+      })
+      .eq("id", data.client_id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const setClientDiscordChannel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { client_id: string; discord_channel_id?: string | null; discord_webhook_url?: string | null }) => ({
+    client_id: z.string().uuid().parse(d.client_id),
+    discord_channel_id: z.string().regex(/^[0-9]{15,25}$/).nullable().optional().parse(d.discord_channel_id ?? null),
+    discord_webhook_url: z.string().trim().url().max(400).nullable().optional().parse(d.discord_webhook_url ?? null),
+  }))
+  .handler(async ({ data, context }) => {
+    await requireFirmManager(context);
+    if (data.discord_webhook_url) {
+      const { isValidDiscordWebhook } = await import("@/lib/notify.server");
+      if (!isValidDiscordWebhook(data.discord_webhook_url)) {
+        throw new Error("URL webhook Discord invalide.");
+      }
+    }
+    const { error } = await context.supabase
+      .from("clients")
+      .update({
+        discord_channel_id: data.discord_channel_id,
+        discord_webhook_url: data.discord_webhook_url,
+      })
+      .eq("id", data.client_id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 /** Rattache / détache un client aux dossiers du cabinet. */

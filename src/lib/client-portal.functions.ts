@@ -21,6 +21,12 @@ const CLIENT_ALLOWED_MIME = new Set([
 const MAX_SIZE = 50 * 1024 * 1024;
 
 async function myClientRow(context: { supabase: any; userId: string }) {
+  const { data: isClient } = await context.supabase.rpc("has_role", {
+    _user_id: context.userId,
+    _role: "client",
+  });
+  if (!isClient) throw new Error("Acces reserve au portail client.");
+
   const { data, error } = await context.supabase
     .from("clients")
     .select("id, first_name, last_name, email, phone, address, company, job_title, discord_webhook_url, firm_id")
@@ -29,6 +35,38 @@ async function myClientRow(context: { supabase: any; userId: string }) {
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Aucun dossier client n'est associé à votre compte.");
   return data;
+}
+
+async function getOrCreateGeneralConversation(
+  context: { supabase: any; userId: string },
+  client: { id: string; firm_id: string | null },
+) {
+  const { data: existing } = await context.supabase
+    .from("client_conversations")
+    .select("id, client_id, firm_id, matter_id, subject, status, client_last_read_at, staff_last_read_at, created_at, updated_at")
+    .eq("client_id", client.id)
+    .is("matter_id", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) return existing;
+
+  if (!client.firm_id) {
+    throw new Error("Le client n'est rattache a aucune entreprise.");
+  }
+
+  const { data: created, error } = await context.supabase
+    .from("client_conversations")
+    .insert({
+      client_id: client.id,
+      firm_id: client.firm_id,
+      created_by: context.userId,
+      subject: "Contacter l'entreprise",
+    })
+    .select("id, client_id, firm_id, matter_id, subject, status, client_last_read_at, staff_last_read_at, created_at, updated_at")
+    .single();
+  if (error) throw new Error(error.message);
+  return created;
 }
 
 // ============ PROFIL ============
@@ -240,6 +278,13 @@ export const listClientMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { matter_id: string }) => ({ matter_id: z.string().uuid().parse(d.matter_id) }))
   .handler(async ({ data, context }) => {
+    await context.supabase
+      .from("matter_messages")
+      .update({ read_by_client_at: new Date().toISOString() })
+      .eq("matter_id", data.matter_id)
+      .neq("author_id", context.userId)
+      .is("read_by_client_at", null);
+
     const { data: rows, error } = await context.supabase
       .from("matter_messages")
       .select("id, body, author_id, created_at, document_id, matter_documents(id, filename, mime_type)")
@@ -249,6 +294,138 @@ export const listClientMessages = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     const withNames = await withActorNames(context.supabase, rows ?? [], { author_id: "author_name" });
     return withNames.map((m: any) => ({ ...m, mine: m.author_id === context.userId }));
+  });
+
+export const listClientNotifications = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await myClientRow(context);
+    const { data, error } = await context.supabase
+      .from("notifications")
+      .select("id, type, title, body, link, read_at, created_at")
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
+export const markClientNotificationsRead = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids?: string[] | null }) => ({
+    ids: z.array(z.string().uuid()).nullable().optional().parse(d.ids ?? null),
+  }))
+  .handler(async ({ data, context }) => {
+    await myClientRow(context);
+    const q = context.supabase
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("user_id", context.userId)
+      .is("read_at", null);
+    const scoped = data.ids && data.ids.length > 0 ? q.in("id", data.ids) : q;
+    const { error } = await scoped;
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const getClientGeneralConversation = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const client = await myClientRow(context);
+    return getOrCreateGeneralConversation(context, client);
+  });
+
+export const listClientGeneralMessages = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const client = await myClientRow(context);
+    const conversation = await getOrCreateGeneralConversation(context, client);
+    const { data: rows, error } = await context.supabase
+      .from("client_conversation_messages")
+      .select("id, conversation_id, author_id, body, attachment_path, attachment_name, attachment_mime, attachment_size_bytes, created_at")
+      .eq("conversation_id", conversation.id)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    if (error) throw new Error(error.message);
+    const withNames = await withActorNames(context.supabase, rows ?? [], { author_id: "author_name" });
+    return {
+      conversation,
+      messages: withNames.map((row: any) => ({ ...row, mine: row.author_id === context.userId })),
+    };
+  });
+
+export const sendClientGeneralMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    body: string;
+    attachment_path?: string | null;
+    attachment_name?: string | null;
+    attachment_mime?: string | null;
+    attachment_size_bytes?: number | null;
+  }) => ({
+    body: z.string().trim().min(1, "Le message est vide").max(5000).parse(d.body),
+    attachment_path: z.string().trim().max(600).nullable().optional().parse(d.attachment_path ?? null),
+    attachment_name: z.string().trim().max(255).nullable().optional().parse(d.attachment_name ?? null),
+    attachment_mime: z.string().trim().max(120).nullable().optional().parse(d.attachment_mime ?? null),
+    attachment_size_bytes: z.number().int().nonnegative().nullable().optional().parse(d.attachment_size_bytes ?? null),
+  }))
+  .handler(async ({ data, context }) => {
+    const client = await myClientRow(context);
+    const conversation = await getOrCreateGeneralConversation(context, client);
+    const { data: created, error } = await context.supabase
+      .from("client_conversation_messages")
+      .insert({
+        conversation_id: conversation.id,
+        author_id: context.userId,
+        body: data.body,
+        attachment_path: data.attachment_path,
+        attachment_name: data.attachment_name,
+        attachment_mime: data.attachment_mime,
+        attachment_size_bytes: data.attachment_size_bytes,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await context.supabase
+      .from("client_conversations")
+      .update({ staff_last_read_at: null })
+      .eq("id", conversation.id);
+
+    if (client.firm_id) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: managers } = await supabaseAdmin
+        .from("lawyers")
+        .select("profile_id")
+        .eq("firm_id", client.firm_id)
+        .not("profile_id", "is", null);
+      const { notifyUser } = await import("@/lib/notify.server");
+      for (const manager of managers ?? []) {
+        await notifyUser(supabaseAdmin, (manager as any).profile_id, {
+          type: "client_general_message",
+          title: "Nouveau message client",
+          body: "Une demande generale client a ete mise a jour.",
+          link: `/clients/${client.id}`,
+          entity_type: "client",
+          entity_id: client.id,
+        });
+      }
+    }
+
+    return { id: created.id, conversation_id: conversation.id };
+  });
+
+export const markClientGeneralConversationRead = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const client = await myClientRow(context);
+    const conversation = await getOrCreateGeneralConversation(context, client);
+    const { error } = await context.supabase
+      .from("client_conversations")
+      .update({ client_last_read_at: new Date().toISOString() })
+      .eq("id", conversation.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const sendClientMessage = createServerFn({ method: "POST" })
@@ -391,13 +568,21 @@ export const getClientDashboard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const client = await myClientRow(context);
-    const [{ data: matters }, { data: docs }, { data: invoices }, { data: messages }] = await Promise.all([
+    const [{ data: matters }, { data: docs }, { data: invoices }, { data: messages }, { count: notificationsUnread }] = await Promise.all([
       context.supabase.from("matters").select("id, number, title, status, opened_on").order("opened_on", { ascending: false }),
       context.supabase.from("matter_documents").select("id, filename, created_at, matter_id").order("created_at", { ascending: false }).limit(5),
       context.supabase.from("invoices").select("id, number, kind, total, currency, delivery_status, sent_at").order("sent_at", { ascending: false }),
       context.supabase.from("matter_messages").select("id, body, created_at, matter_id, author_id").order("created_at", { ascending: false }).limit(5),
+      context.supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", context.userId)
+        .is("read_at", null),
     ]);
     const invRows = invoices ?? [];
+    const unreadMessages = (messages ?? []).filter(
+      (m: any) => m.author_id !== context.userId,
+    ).length;
     return {
       client: { first_name: client.first_name, last_name: client.last_name, company: client.company },
       matters_total: (matters ?? []).length,
@@ -405,6 +590,8 @@ export const getClientDashboard = createServerFn({ method: "GET" })
       documents_total: (docs ?? []).length,
       to_sign: invRows.filter((i: any) => ["sent", "viewed", "signing"].includes(i.delivery_status)).length,
       signed: invRows.filter((i: any) => i.delivery_status === "signed").length,
+      notifications_unread: notificationsUnread ?? 0,
+      messages_unread: unreadMessages,
       recent_matters: (matters ?? []).slice(0, 5),
       recent_documents: docs ?? [],
       recent_messages: messages ?? [],

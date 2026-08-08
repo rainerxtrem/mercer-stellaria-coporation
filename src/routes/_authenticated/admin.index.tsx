@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, Building2, Newspaper, BookOpen, ShieldCheck, Activity } from "lucide-react";
+import { Users, Building2, Newspaper, BookOpen, ShieldCheck, Activity, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({ meta: [{ title: "Tableau de bord — Administration" }] }),
@@ -44,6 +45,11 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button asChild className="bg-navy text-white hover:bg-navy-deep">
+          <Link to="/admin/enterprises"><Plus className="mr-2 h-4 w-4" />+ Nouvelle entreprise</Link>
+        </Button>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map((c) => (
           <Card key={c.label} className="shadow-[var(--shadow-card)]">

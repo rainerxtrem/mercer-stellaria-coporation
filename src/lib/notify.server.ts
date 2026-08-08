@@ -69,7 +69,7 @@ export async function notifyClient(
   }
   await sendDiscordWebhook(clientRow.discord_webhook_url, {
     title: payload.title,
-    body: payload.body ?? null,
+    body: "Vous avez une nouvelle notification sur votre portail client securise.",
     link: payload.link && origin ? `${origin}${payload.link}` : null,
   });
 }

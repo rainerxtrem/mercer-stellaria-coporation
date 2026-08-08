@@ -82,16 +82,33 @@ export const getClient = createServerFn({ method: "GET" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!client) throw new Error("Client introuvable");
-    const { data: matters } = await context.supabase
-      .from("matters")
-      .select("id, number, title, status, opened_on")
-      .eq("client_id", data.id)
-      .order("opened_on", { ascending: false });
+    const [{ data: direct }, { data: linked }] = await Promise.all([
+      context.supabase
+        .from("matters")
+        .select("id, number, title, status, opened_on")
+        .eq("client_id", data.id)
+        .order("opened_on", { ascending: false }),
+      context.supabase
+        .from("matter_clients")
+        .select("matters(id, number, title, status, opened_on)")
+        .eq("client_id", data.id),
+    ]);
+
+    const map = new Map<string, any>();
+    for (const matter of direct ?? []) map.set(matter.id, matter);
+    for (const row of linked ?? []) {
+      const matter = (row as any).matters;
+      if (matter?.id) map.set(matter.id, matter);
+    }
+
+    const matters = Array.from(map.values()).sort((a, b) =>
+      String(b.opened_on ?? "").localeCompare(String(a.opened_on ?? "")),
+    );
     const [named] = await withActorNames(context.supabase, [client], {
       owner_id: "owner_name",
       updated_by: "updated_by_name",
     });
-    return { client: named, matters: matters ?? [] };
+    return { client: named, matters };
   });
 
 

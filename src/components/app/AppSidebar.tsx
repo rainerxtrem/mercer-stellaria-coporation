@@ -5,59 +5,21 @@ import {
   SidebarSeparator, useSidebar,
 } from "@/components/ui/sidebar";
 import {
-  Gauge, FolderOpen, Users, FileText, User as UserIcon,
+  Gauge, FolderOpen, Users, FileText,
   Shield, Building2, Newspaper, BookOpen, ScrollText, Settings,
   ChevronRight, GraduationCap, Home, Inbox, CheckSquare, Scale, DollarSign, FileStack,
+  Receipt, FileCheck2, MessageSquare, CalendarDays,
 } from "lucide-react";
 import seal from "@/assets/seal.png";
 import { useIsBatonnier } from "@/lib/auth";
-import { useWorkspace, type WorkspaceId } from "@/hooks/use-workspace";
-import { WorkspaceSwitcher } from "@/components/app/WorkspaceSwitcher";
+import { useEnterpriseWorkspace } from "@/hooks/use-enterprise-workspace";
+import { EnterpriseSwitcher } from "@/components/app/EnterpriseSwitcher";
 
 type NavEntry = { to: string; label: string; icon: typeof Shield; exact?: boolean };
 
-const CITOYEN_NAV: NavEntry[] = [
-  { to: "/espace-avocat", label: "Mon espace", icon: UserIcon },
-  { to: "/examens",       label: "Examens",    icon: GraduationCap },
-  { to: "/formations",    label: "Formations", icon: GraduationCap },
-];
-
-const AVOCAT_NAV: NavEntry[] = [
-  { to: "/tableau-de-bord", label: "Tableau de bord", icon: Gauge },
-  { to: "/dossiers",         label: "Dossiers",       icon: FolderOpen },
-  { to: "/taches",           label: "Tâches",         icon: CheckSquare },
-  { to: "/clients",          label: "Clients",        icon: Users },
-  { to: "/facturation",      label: "Facturation",    icon: FileText },
-  { to: "/cabinet/modeles",  label: "Générateur de documents", icon: FileStack },
-  { to: "/formations",       label: "Formations",     icon: GraduationCap },
-  { to: "/bibliotheque",     label: "Bibliothèque",   icon: BookOpen },
-  { to: "/examens",          label: "Examen Barreau", icon: GraduationCap },
-  { to: "/mes-dossiers-disciplinaires", label: "Disciplinaire", icon: Scale },
-  { to: "/espace-avocat",    label: "Mon espace",     icon: UserIcon },
-];
-
-const ASSISTANT_NAV: NavEntry[] = [
-  { to: "/dossiers",       label: "Dossiers partagés", icon: FolderOpen },
-  { to: "/taches",         label: "Mes tâches",         icon: CheckSquare },
-  { to: "/bibliotheque",   label: "Bibliothèque",       icon: BookOpen },
-  { to: "/espace-avocat",  label: "Mon espace",         icon: UserIcon },
-];
-
-const CABINET_NAV: NavEntry[] = [
-  { to: "/cabinet",             label: "Tableau de bord", icon: Gauge, exact: true },
-  { to: "/cabinet/membres",     label: "Membres",           icon: Users },
-  { to: "/cabinet/dossiers",    label: "Dossiers",          icon: FolderOpen },
-  { to: "/cabinet/facturation", label: "Facturation",       icon: FileText },
-  { to: "/cabinet/tarifs",      label: "Grille tarifaire",  icon: DollarSign },
-  { to: "/cabinet/modeles",     label: "Modèles documentaires", icon: FileStack },
-
-  { to: "/cabinet/formations",  label: "Formations",        icon: GraduationCap },
-  { to: "/cabinet/parametres",  label: "Paramètres",        icon: Settings },
-  { to: "/espace-avocat",       label: "Mon espace",        icon: UserIcon },
-];
-
 const ADMIN_NAV: NavEntry[] = [
   { to: "/admin",              label: "Vue direction",   icon: Shield, exact: true },
+  { to: "/admin/enterprises",  label: "Entreprises",     icon: Building2 },
   { to: "/admin/avocats",      label: "Avocats",         icon: Users },
   { to: "/admin/cabinets",     label: "Cabinets",        icon: Building2 },
   { to: "/admin/examens",      label: "Examens",         icon: GraduationCap },
@@ -72,28 +34,22 @@ const ADMIN_NAV: NavEntry[] = [
   { to: "/admin/sauvegardes",  label: "Sauvegardes",     icon: Settings },
 ];
 
-const FORMATEUR_NAV: NavEntry[] = [
-  { to: "/formateur",           label: "Tableau de bord",   icon: Gauge, exact: true },
-  { to: "/admin/formations",    label: "Gérer les formations", icon: GraduationCap },
-  { to: "/formations",          label: "Catalogue public",  icon: BookOpen },
-  { to: "/espace-avocat",       label: "Mon espace",        icon: UserIcon },
-];
-
-const EXAMINATEUR_NAV: NavEntry[] = [
-  { to: "/examinateur",         label: "Tableau de bord",   icon: Gauge, exact: true },
-  { to: "/admin/examens",       label: "Gérer les examens", icon: GraduationCap },
-  { to: "/examens",             label: "Catalogue public",  icon: GraduationCap },
-  { to: "/espace-avocat",       label: "Mon espace",        icon: UserIcon },
-];
-
-const WORKSPACE_NAV: Record<WorkspaceId, { label: string; nav: NavEntry[] }> = {
-  batonnier:   { label: "Administration Corporate", nav: AVOCAT_NAV },
-  avocat:      { label: "Espace Avocat", nav: AVOCAT_NAV },
-  cabinet:     { label: "Direction de cabinet", nav: CABINET_NAV },
-  assistant:   { label: "Espace Assistant", nav: ASSISTANT_NAV },
-  citoyen:     { label: "Mon espace", nav: CITOYEN_NAV },
-  formateur:   { label: "Espace Formateur", nav: FORMATEUR_NAV },
-  examinateur: { label: "Espace Examinateur", nav: EXAMINATEUR_NAV },
+const MODULE_ICONS: Record<string, typeof Shield> = {
+  Gauge,
+  FolderOpen,
+  Users,
+  FileText,
+  FileStack,
+  ScrollText,
+  Receipt,
+  FileCheck2,
+  MessageSquare,
+  CalendarDays,
+  CheckSquare,
+  BookOpen,
+  GraduationCap,
+  Scale,
+  DollarSign,
 };
 
 export function AppSidebar() {
@@ -101,8 +57,20 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAdmin = useIsBatonnier();
-  const { active } = useWorkspace();
-  const primary = WORKSPACE_NAV[active];
+  const { activeEnterprise, navModules } = useEnterpriseWorkspace();
+
+  const primaryNav: NavEntry[] = [];
+  const seenRoutes = new Set<string>();
+  for (const mod of navModules as any[]) {
+    if (!mod.route_path || seenRoutes.has(mod.route_path)) continue;
+    seenRoutes.add(mod.route_path);
+    const icon = MODULE_ICONS[mod.icon_name as string] ?? Gauge;
+    primaryNav.push({ to: mod.route_path, label: mod.label, icon, exact: mod.route_path === "/tableau-de-bord" });
+  }
+
+  if (primaryNav.length === 0) {
+    primaryNav.push({ to: "/espace-avocat", label: "Mon espace", icon: Gauge });
+  }
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
@@ -119,15 +87,15 @@ export function AppSidebar() {
             </div>
           )}
         </Link>
-        <WorkspaceSwitcher />
+        <EnterpriseSwitcher />
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{primary.label}</SidebarGroupLabel>
+          <SidebarGroupLabel>{activeEnterprise?.name ?? "Entreprise"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {primary.nav.map((n) => (
+              {primaryNav.map((n) => (
                 <SidebarMenuItem key={n.to}>
                   <SidebarMenuButton asChild isActive={isActive(n.to, n.exact)} tooltip={n.label}>
                     <Link to={n.to}>
@@ -141,7 +109,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isAdmin && active === "batonnier" && (
+        {isAdmin && (
           <>
             <SidebarSeparator />
             <SidebarGroup>

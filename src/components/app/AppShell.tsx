@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 
@@ -13,13 +13,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSession, useIsBatonnier, signOut } from "@/lib/auth";
 import { LogOut, User as UserIcon, Shield, ExternalLink } from "lucide-react";
+import { useEnterpriseWorkspace } from "@/hooks/use-enterprise-workspace";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const isAdmin = useIsBatonnier();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { context, activeEnterprise } = useEnterpriseWorkspace();
   const email = session?.user.email ?? "";
   const initials = (email.split("@")[0] ?? "?").slice(0, 2).toUpperCase();
+
+  const deniedByModule = (() => {
+    if (!context || !activeEnterprise) return false;
+    if (pathname.startsWith("/admin") || pathname.startsWith("/portail-client")) return false;
+
+    const routeTargets = (context.known_route_targets ?? []) as Array<{ module_slug: string; paths: string[] }>;
+    const matched = routeTargets.find((entry) => entry.paths.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/")));
+    if (!matched) return false;
+    return !(activeEnterprise.modules ?? []).includes(matched.module_slug);
+  })();
 
   return (
     <SidebarProvider>
@@ -71,7 +84,23 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <div className="min-h-[calc(100dvh-3.5rem)] animate-[fade-in_0.35s_ease-out]">
-          {children}
+          {deniedByModule ? (
+            <div className="container-page py-16">
+              <div className="max-w-2xl rounded-xl border border-border bg-card p-6">
+                <h2 className="font-display text-xl font-semibold text-navy-deep">Module non autorise</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Ce module est desactive ou non attribue a vos grades dans l'entreprise active.
+                </p>
+                <div className="mt-4">
+                  <Button onClick={() => navigate({ to: "/tableau-de-bord" })} className="bg-navy text-white hover:bg-navy-deep">
+                    Retour au tableau de bord
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </div>
       </SidebarInset>
     </SidebarProvider>
