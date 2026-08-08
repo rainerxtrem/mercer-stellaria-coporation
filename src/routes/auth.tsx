@@ -127,14 +127,9 @@ function AuthPage() {
               <p className="flex items-start gap-2">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
                 <span>
-                  L’inscription publique est fermée. Les comptes d’avocats sont créés par la direction,
-                  les comptes clients par leur cabinet. Pour toute demande, utilisez le{" "}
+                  En cas de problème avec l'inscription, utilisez le {" "}
                   <Link to="/contact" className="font-medium text-navy underline">formulaire de contact</Link>.
                 </span>
-              </p>
-              <p className="mt-2">
-                Vous etes client ? Utilisez le{" "}
-                <Link to="/portail-client/auth" className="font-medium text-navy underline">portail client Discord</Link>.
               </p>
               <div className="mt-3">
                 <Button

@@ -122,10 +122,6 @@ function ClientPortalOnboardingPage() {
                 {loading ? "Activation en cours..." : "Activer mon accès"}
               </Button>
             </form>
-
-            <p className="mt-6 text-xs text-zinc-400">
-              Vous n’avez pas encore d’ID unique ? <Link to="/contact" className="text-amber-300 underline">Contactez votre cabinet</Link>.
-            </p>
           </CardContent>
         </Card>
       </div>
