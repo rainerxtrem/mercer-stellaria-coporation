@@ -207,6 +207,158 @@ describe("Multi-entreprise modulaire", () => {
     );
     expect(allowedFlag).toBe(true);
   });
+
+  it.skipIf(!canAuthenticate)("supporte creation/modification/suppression de grades independants par entreprise", async () => {
+    const ctx = await seed();
+    const service = createServerClient(SERVICE_CONTEXT);
+
+    const sameCode = `shared_${Date.now()}`;
+    const { data: gradeA, error: errA } = await service
+      .from("enterprise_grades")
+      .insert({ firm_id: ctx.firmA, code: sameCode, name: "Grade A", is_system: false } as never)
+      .select("id, code, name, firm_id")
+      .single();
+    expect(errA).toBeNull();
+
+    const { data: gradeB, error: errB } = await service
+      .from("enterprise_grades")
+      .insert({ firm_id: ctx.firmB, code: sameCode, name: "Grade B", is_system: false } as never)
+      .select("id, code, name, firm_id")
+      .single();
+    expect(errB).toBeNull();
+
+    expect(gradeA?.code).toBe(gradeB?.code);
+    expect(gradeA?.firm_id).not.toBe(gradeB?.firm_id);
+
+    const { error: updateErr } = await service
+      .from("enterprise_grades")
+      .update({ name: "Grade A - Updated" } as never)
+      .eq("id", gradeA!.id);
+    expect(updateErr).toBeNull();
+
+    const { data: updatedA } = await service
+      .from("enterprise_grades")
+      .select("name")
+      .eq("id", gradeA!.id)
+      .single();
+    const { data: unchangedB } = await service
+      .from("enterprise_grades")
+      .select("name")
+      .eq("id", gradeB!.id)
+      .single();
+
+    expect(updatedA?.name).toBe("Grade A - Updated");
+    expect(unchangedB?.name).toBe("Grade B");
+
+    const { error: delErr } = await service
+      .from("enterprise_grades")
+      .delete()
+      .eq("id", gradeA!.id);
+    expect(delErr).toBeNull();
+
+    const { data: stillB } = await service
+      .from("enterprise_grades")
+      .select("id")
+      .eq("id", gradeB!.id)
+      .maybeSingle();
+    expect(stillB?.id).toBe(gradeB?.id);
+  });
+
+  it.skipIf(!canAuthenticate)("active automatiquement le profil Avocat et conserve l'historique au retrait", async () => {
+    const ctx = await seed();
+    const service = createServerClient(SERVICE_CONTEXT);
+
+    const { data: membershipA } = await service
+      .from("enterprise_memberships")
+      .select("id")
+      .eq("user_id", ctx.userA)
+      .eq("firm_id", ctx.firmA)
+      .single();
+    expect(membershipA?.id).toBeTruthy();
+
+    const lawyerCode = `lawyer_auto_${Date.now()}`;
+    const supportCode = `support_auto_${Date.now()}`;
+
+    const { data: lawyerGrade, error: lawyerGradeErr } = await service
+      .from("enterprise_grades")
+      .insert({ firm_id: ctx.firmA, code: lawyerCode, name: "Avocat", is_system: false } as never)
+      .select("id")
+      .single();
+    expect(lawyerGradeErr).toBeNull();
+
+    const { data: supportGrade, error: supportGradeErr } = await service
+      .from("enterprise_grades")
+      .insert({ firm_id: ctx.firmA, code: supportCode, name: "Support", is_system: false } as never)
+      .select("id")
+      .single();
+    expect(supportGradeErr).toBeNull();
+
+    await service.from("enterprise_grade_modules").upsert([
+      { grade_id: supportGrade!.id, module_slug: "matters", allowed: true },
+      { grade_id: supportGrade!.id, module_slug: "clients", allowed: true },
+    ] as never);
+
+    const { error: insSupportErr } = await service
+      .from("enterprise_member_grades")
+      .insert({ membership_id: membershipA!.id, grade_id: supportGrade!.id } as never);
+    expect(insSupportErr).toBeNull();
+
+    const { error: insLawyerErr } = await service
+      .from("enterprise_member_grades")
+      .insert({ membership_id: membershipA!.id, grade_id: lawyerGrade!.id } as never);
+    expect(insLawyerErr).toBeNull();
+
+    const { data: lawyerRow, error: lawyerErr } = await service
+      .from("lawyers")
+      .select("id, profile_id, firm_id, first_name, last_name")
+      .eq("profile_id", ctx.userA)
+      .eq("firm_id", ctx.firmA)
+      .maybeSingle();
+    expect(lawyerErr).toBeNull();
+    expect(lawyerRow?.id).toBeTruthy();
+
+    const { data: avocatRole } = await service
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", ctx.userA)
+      .eq("role", "avocat")
+      .maybeSingle();
+    expect(avocatRole?.id).toBeTruthy();
+
+    const allowedBeforeRemoval = await userClient(ctx.userA, ctx.firmA)
+      .from("matters")
+      .select("id")
+      .limit(1);
+    expect(allowedBeforeRemoval.error).toBeNull();
+
+    const { error: removeLawyerGradeErr } = await service
+      .from("enterprise_member_grades")
+      .delete()
+      .eq("membership_id", membershipA!.id)
+      .eq("grade_id", lawyerGrade!.id);
+    expect(removeLawyerGradeErr).toBeNull();
+
+    const allowedAfterRemoval = await userClient(ctx.userA, ctx.firmA)
+      .from("matters")
+      .select("id")
+      .limit(1);
+    expect(allowedAfterRemoval.error).toBeNull();
+
+    const { data: avocatRoleAfter } = await service
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", ctx.userA)
+      .eq("role", "avocat")
+      .maybeSingle();
+    expect(avocatRoleAfter).toBeNull();
+
+    const { data: lawyerStillThere } = await service
+      .from("lawyers")
+      .select("id")
+      .eq("id", lawyerRow!.id)
+      .maybeSingle();
+    expect(lawyerStillThere?.id).toBe(lawyerRow?.id);
+  });
 });
 
 afterAll(async () => {
@@ -215,6 +367,9 @@ afterAll(async () => {
   await withSession(SERVICE_CONTEXT, async (client) => {
     if (createdMatterIds.length > 0) {
       await client.query("delete from public.matters where id = any($1::uuid[])", [createdMatterIds]);
+    }
+    if (createdUserIds.length > 0) {
+      await client.query("delete from public.lawyers where profile_id = any($1::uuid[])", [createdUserIds]);
     }
     if (createdFirmIds.length > 0) {
       await client.query("delete from public.firms where id = any($1::uuid[])", [createdFirmIds]);

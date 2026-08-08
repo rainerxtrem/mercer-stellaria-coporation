@@ -248,16 +248,153 @@ export const getEnterpriseAdminDetail = createServerFn({ method: "GET" })
         : Promise.resolve({ data: [] as any[] }),
     ]);
 
+    const gradeById = new Map<string, any>();
+    for (const grade of grades ?? []) gradeById.set(grade.id, grade);
+
+    const moduleEnabled = new Set<string>();
+    for (const module of modules ?? []) {
+      if (module.enabled) moduleEnabled.add(module.module_slug);
+    }
+
+    const allowedModulesByGrade = new Map<string, Set<string>>();
+    for (const row of gradeModules ?? []) {
+      if (!row.allowed) continue;
+      const set = allowedModulesByGrade.get(row.grade_id) ?? new Set<string>();
+      set.add(row.module_slug);
+      allowedModulesByGrade.set(row.grade_id, set);
+    }
+
+    const permissionsByGrade = new Map<string, Set<string>>();
+    for (const row of gradePermissions ?? []) {
+      const set = permissionsByGrade.get(row.grade_id) ?? new Set<string>();
+      set.add(row.permission_key);
+      permissionsByGrade.set(row.grade_id, set);
+    }
+
+    const gradeIdsByMembership = new Map<string, string[]>();
+    for (const row of memberGrades ?? []) {
+      const list = gradeIdsByMembership.get(row.membership_id) ?? [];
+      list.push(row.grade_id);
+      gradeIdsByMembership.set(row.membership_id, list);
+    }
+
+    const memberEffectiveAccess = (members ?? []).map((member: any) => {
+      const assignedGradeIds = gradeIdsByMembership.get(member.id) ?? [];
+      const assignedGrades = assignedGradeIds
+        .map((id) => gradeById.get(id))
+        .filter(Boolean);
+
+      const effectiveModuleSet = new Set<string>();
+      const effectivePermissionSet = new Set<string>();
+      for (const gradeId of assignedGradeIds) {
+        for (const moduleSlug of allowedModulesByGrade.get(gradeId) ?? new Set<string>()) {
+          if (moduleEnabled.has(moduleSlug)) effectiveModuleSet.add(moduleSlug);
+        }
+        for (const permissionKey of permissionsByGrade.get(gradeId) ?? new Set<string>()) {
+          effectivePermissionSet.add(permissionKey);
+        }
+      }
+
+      const hasLawyerGrade = assignedGrades.some((grade: any) => {
+        const code = String(grade.code ?? "").toLowerCase();
+        const name = String(grade.name ?? "").toLowerCase();
+        return code === "lawyer" || name === "avocat" || name === "lawyer";
+      });
+
+      return {
+        membership_id: member.id,
+        user_id: member.user_id,
+        grade_ids: assignedGradeIds,
+        grade_names: assignedGrades.map((grade: any) => grade.name),
+        effective_modules: Array.from(effectiveModuleSet).sort(),
+        effective_permissions: Array.from(effectivePermissionSet).sort(),
+        has_lawyer_grade: hasLawyerGrade,
+      };
+    });
+
+    const memberIds = (members ?? []).map((member: any) => member.user_id).filter(Boolean);
+    const userEmailMap = new Map<string, string | null>();
+    if (memberIds.length > 0) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const users = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      for (const user of users.data?.users ?? []) {
+        if (memberIds.includes(user.id)) {
+          userEmailMap.set(user.id, user.email ?? null);
+        }
+      }
+    }
+
+    const membersWithIdentity = (members ?? []).map((member: any) => ({
+      ...member,
+      email: userEmailMap.get(member.user_id) ?? null,
+    }));
+
     return {
       firm,
       modules: modules ?? [],
       grades: grades ?? [],
-      members: members ?? [],
+      members: membersWithIdentity,
       permissions: permissions ?? [],
       grade_modules: gradeModules ?? [],
       grade_permissions: gradePermissions ?? [],
       member_grades: memberGrades ?? [],
+      member_effective_access: memberEffectiveAccess,
     };
+  });
+
+export const updateEnterpriseSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: {
+      firm_id: string;
+      name: string;
+      number: string;
+      status?: "active" | "suspended" | "revoked";
+      address?: string | null;
+      manager?: string | null;
+      logo_url?: string | null;
+      brand_primary_color?: string | null;
+      brand_secondary_color?: string | null;
+      brand_accent_color?: string | null;
+      visual_identity?: Record<string, unknown> | null;
+      settings?: Record<string, unknown> | null;
+    }) => ({
+      firm_id: z.string().uuid().parse(d.firm_id),
+      name: z.string().trim().min(2).max(120).parse(d.name),
+      number: z.string().trim().min(2).max(30).parse(d.number),
+      status: z.enum(["active", "suspended", "revoked"]).default("active").parse(d.status ?? "active"),
+      address: z.string().trim().max(200).nullable().optional().parse(d.address ?? null),
+      manager: z.string().trim().max(120).nullable().optional().parse(d.manager ?? null),
+      logo_url: z.string().trim().url().max(500).nullable().optional().parse(d.logo_url ?? null),
+      brand_primary_color: colorSchema.parse(d.brand_primary_color ?? null),
+      brand_secondary_color: colorSchema.parse(d.brand_secondary_color ?? null),
+      brand_accent_color: colorSchema.parse(d.brand_accent_color ?? null),
+      visual_identity: z.record(z.any()).nullable().optional().parse(d.visual_identity ?? {}),
+      settings: z.record(z.any()).nullable().optional().parse(d.settings ?? {}),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    await assertEnterpriseManager(context, data.firm_id);
+
+    const { error } = await context.supabase
+      .from("firms")
+      .update({
+        name: data.name,
+        number: data.number,
+        status: data.status,
+        address: data.address,
+        manager: data.manager,
+        logo_url: data.logo_url,
+        brand_primary_color: data.brand_primary_color,
+        brand_secondary_color: data.brand_secondary_color,
+        brand_accent_color: data.brand_accent_color,
+        visual_identity: data.visual_identity ?? {},
+        settings: data.settings ?? {},
+      })
+      .eq("id", data.firm_id);
+
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const updateEnterpriseModules = createServerFn({ method: "POST" })
@@ -466,6 +603,25 @@ export const setEnterpriseMemberGrades = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
 
+    return { ok: true };
+  });
+
+export const removeEnterpriseMembership = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { firm_id: string; membership_id: string }) => ({
+    firm_id: z.string().uuid().parse(d.firm_id),
+    membership_id: z.string().uuid().parse(d.membership_id),
+  }))
+  .handler(async ({ data, context }) => {
+    await assertEnterpriseManager(context, data.firm_id);
+
+    const { error } = await context.supabase
+      .from("enterprise_memberships")
+      .delete()
+      .eq("id", data.membership_id)
+      .eq("firm_id", data.firm_id);
+
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 

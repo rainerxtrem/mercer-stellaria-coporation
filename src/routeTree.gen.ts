@@ -81,6 +81,7 @@ import { Route as ApiStorageUploadRouteImport } from './routes/api/storage.uploa
 import { Route as PortailClientDossiersMatterIdRouteImport } from './routes/portail-client.dossiers.$matterId'
 import { Route as VerificationFactureTokenRouteImport } from './routes/verification.facture.$token'
 import { Route as AuthenticatedAdminDisciplineCaseIdRouteImport } from './routes/_authenticated/admin.discipline.$caseId'
+import { Route as AuthenticatedAdminEnterprisesFirmIdRouteImport } from './routes/_authenticated/admin.enterprises.$firmId'
 import { Route as AuthenticatedAdminExamensIndexRouteImport } from './routes/_authenticated/admin.examens.index'
 import { Route as AuthenticatedAdminExamensIdRouteImport } from './routes/_authenticated/admin.examens.$id'
 import { Route as AuthenticatedAdminFormationsIndexRouteImport } from './routes/_authenticated/admin.formations.index'
@@ -481,6 +482,12 @@ const AuthenticatedAdminDisciplineCaseIdRoute =
     path: '/$caseId',
     getParentRoute: () => AuthenticatedAdminDisciplineRoute,
   } as any)
+const AuthenticatedAdminEnterprisesFirmIdRoute =
+  AuthenticatedAdminEnterprisesFirmIdRouteImport.update({
+    id: '/$firmId',
+    path: '/$firmId',
+    getParentRoute: () => AuthenticatedAdminEnterprisesRoute,
+  } as any)
 const AuthenticatedAdminExamensIndexRoute =
   AuthenticatedAdminExamensIndexRouteImport.update({
     id: '/examens/',
@@ -579,7 +586,7 @@ export interface FileRoutesByFullPath {
   '/admin/contenus': typeof AuthenticatedAdminContenusRoute
   '/admin/demandes': typeof AuthenticatedAdminDemandesRoute
   '/admin/discipline': typeof AuthenticatedAdminDisciplineRouteWithChildren
-  '/admin/enterprises': typeof AuthenticatedAdminEnterprisesRoute
+  '/admin/enterprises': typeof AuthenticatedAdminEnterprisesRouteWithChildren
   '/admin/journal': typeof AuthenticatedAdminJournalRoute
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/sauvegardes': typeof AuthenticatedAdminSauvegardesRoute
@@ -606,6 +613,7 @@ export interface FileRoutesByFullPath {
   '/examens/': typeof AuthenticatedExamensIndexRoute
   '/facturation/': typeof AuthenticatedFacturationIndexRoute
   '/admin/discipline/$caseId': typeof AuthenticatedAdminDisciplineCaseIdRoute
+  '/admin/enterprises/$firmId': typeof AuthenticatedAdminEnterprisesFirmIdRoute
   '/admin/examens/$id': typeof AuthenticatedAdminExamensIdRouteWithChildren
   '/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
@@ -659,7 +667,7 @@ export interface FileRoutesByTo {
   '/admin/contenus': typeof AuthenticatedAdminContenusRoute
   '/admin/demandes': typeof AuthenticatedAdminDemandesRoute
   '/admin/discipline': typeof AuthenticatedAdminDisciplineRouteWithChildren
-  '/admin/enterprises': typeof AuthenticatedAdminEnterprisesRoute
+  '/admin/enterprises': typeof AuthenticatedAdminEnterprisesRouteWithChildren
   '/admin/journal': typeof AuthenticatedAdminJournalRoute
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/sauvegardes': typeof AuthenticatedAdminSauvegardesRoute
@@ -686,6 +694,7 @@ export interface FileRoutesByTo {
   '/examens': typeof AuthenticatedExamensIndexRoute
   '/facturation': typeof AuthenticatedFacturationIndexRoute
   '/admin/discipline/$caseId': typeof AuthenticatedAdminDisciplineCaseIdRoute
+  '/admin/enterprises/$firmId': typeof AuthenticatedAdminEnterprisesFirmIdRoute
   '/admin/examens/$id': typeof AuthenticatedAdminExamensIdRouteWithChildren
   '/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
@@ -743,7 +752,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/contenus': typeof AuthenticatedAdminContenusRoute
   '/_authenticated/admin/demandes': typeof AuthenticatedAdminDemandesRoute
   '/_authenticated/admin/discipline': typeof AuthenticatedAdminDisciplineRouteWithChildren
-  '/_authenticated/admin/enterprises': typeof AuthenticatedAdminEnterprisesRoute
+  '/_authenticated/admin/enterprises': typeof AuthenticatedAdminEnterprisesRouteWithChildren
   '/_authenticated/admin/journal': typeof AuthenticatedAdminJournalRoute
   '/_authenticated/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/_authenticated/admin/sauvegardes': typeof AuthenticatedAdminSauvegardesRoute
@@ -770,6 +779,7 @@ export interface FileRoutesById {
   '/_authenticated/examens/': typeof AuthenticatedExamensIndexRoute
   '/_authenticated/facturation/': typeof AuthenticatedFacturationIndexRoute
   '/_authenticated/admin/discipline/$caseId': typeof AuthenticatedAdminDisciplineCaseIdRoute
+  '/_authenticated/admin/enterprises/$firmId': typeof AuthenticatedAdminEnterprisesFirmIdRoute
   '/_authenticated/admin/examens/$id': typeof AuthenticatedAdminExamensIdRouteWithChildren
   '/_authenticated/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/_authenticated/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
@@ -854,6 +864,7 @@ export interface FileRouteTypes {
     | '/examens/'
     | '/facturation/'
     | '/admin/discipline/$caseId'
+    | '/admin/enterprises/$firmId'
     | '/admin/examens/$id'
     | '/admin/formations/$id'
     | '/examens/$id/passage'
@@ -934,6 +945,7 @@ export interface FileRouteTypes {
     | '/examens'
     | '/facturation'
     | '/admin/discipline/$caseId'
+    | '/admin/enterprises/$firmId'
     | '/admin/examens/$id'
     | '/admin/formations/$id'
     | '/examens/$id/passage'
@@ -1017,6 +1029,7 @@ export interface FileRouteTypes {
     | '/_authenticated/examens/'
     | '/_authenticated/facturation/'
     | '/_authenticated/admin/discipline/$caseId'
+    | '/_authenticated/admin/enterprises/$firmId'
     | '/_authenticated/admin/examens/$id'
     | '/_authenticated/admin/formations/$id'
     | '/_authenticated/examens/$id/passage'
@@ -1566,6 +1579,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminDisciplineCaseIdRouteImport
       parentRoute: typeof AuthenticatedAdminDisciplineRoute
     }
+    '/_authenticated/admin/enterprises/$firmId': {
+      id: '/_authenticated/admin/enterprises/$firmId'
+      path: '/$firmId'
+      fullPath: '/admin/enterprises/$firmId'
+      preLoaderRoute: typeof AuthenticatedAdminEnterprisesFirmIdRouteImport
+      parentRoute: typeof AuthenticatedAdminEnterprisesRoute
+    }
     '/_authenticated/admin/examens/': {
       id: '/_authenticated/admin/examens/'
       path: '/examens'
@@ -1647,6 +1667,21 @@ const AuthenticatedAdminDisciplineRouteWithChildren =
     AuthenticatedAdminDisciplineRouteChildren,
   )
 
+interface AuthenticatedAdminEnterprisesRouteChildren {
+  AuthenticatedAdminEnterprisesFirmIdRoute: typeof AuthenticatedAdminEnterprisesFirmIdRoute
+}
+
+const AuthenticatedAdminEnterprisesRouteChildren: AuthenticatedAdminEnterprisesRouteChildren =
+  {
+    AuthenticatedAdminEnterprisesFirmIdRoute:
+      AuthenticatedAdminEnterprisesFirmIdRoute,
+  }
+
+const AuthenticatedAdminEnterprisesRouteWithChildren =
+  AuthenticatedAdminEnterprisesRoute._addFileChildren(
+    AuthenticatedAdminEnterprisesRouteChildren,
+  )
+
 interface AuthenticatedAdminExamensIdRouteChildren {
   AuthenticatedAdminExamensIdCopiesAttemptIdRoute: typeof AuthenticatedAdminExamensIdCopiesAttemptIdRoute
 }
@@ -1670,7 +1705,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminContenusRoute: typeof AuthenticatedAdminContenusRoute
   AuthenticatedAdminDemandesRoute: typeof AuthenticatedAdminDemandesRoute
   AuthenticatedAdminDisciplineRoute: typeof AuthenticatedAdminDisciplineRouteWithChildren
-  AuthenticatedAdminEnterprisesRoute: typeof AuthenticatedAdminEnterprisesRoute
+  AuthenticatedAdminEnterprisesRoute: typeof AuthenticatedAdminEnterprisesRouteWithChildren
   AuthenticatedAdminJournalRoute: typeof AuthenticatedAdminJournalRoute
   AuthenticatedAdminRolesRoute: typeof AuthenticatedAdminRolesRoute
   AuthenticatedAdminSauvegardesRoute: typeof AuthenticatedAdminSauvegardesRoute
@@ -1690,7 +1725,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDemandesRoute: AuthenticatedAdminDemandesRoute,
   AuthenticatedAdminDisciplineRoute:
     AuthenticatedAdminDisciplineRouteWithChildren,
-  AuthenticatedAdminEnterprisesRoute: AuthenticatedAdminEnterprisesRoute,
+  AuthenticatedAdminEnterprisesRoute:
+    AuthenticatedAdminEnterprisesRouteWithChildren,
   AuthenticatedAdminJournalRoute: AuthenticatedAdminJournalRoute,
   AuthenticatedAdminRolesRoute: AuthenticatedAdminRolesRoute,
   AuthenticatedAdminSauvegardesRoute: AuthenticatedAdminSauvegardesRoute,

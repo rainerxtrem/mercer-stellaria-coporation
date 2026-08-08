@@ -68,6 +68,15 @@ export function AppSidebar() {
     primaryNav.push({ to: mod.route_path, label: mod.label, icon, exact: mod.route_path === "/tableau-de-bord" });
   }
 
+  const hasLawyerGrade = (activeEnterprise?.grade_names ?? []).some((name: string) => {
+    const normalized = String(name ?? "").toLowerCase();
+    return normalized === "avocat" || normalized === "lawyer";
+  });
+
+  if (hasLawyerGrade && !seenRoutes.has("/espace-avocat")) {
+    primaryNav.push({ to: "/espace-avocat", label: "Espace Avocat", icon: Scale });
+  }
+
   if (primaryNav.length === 0) {
     primaryNav.push({ to: "/espace-avocat", label: "Mon espace", icon: Gauge });
   }

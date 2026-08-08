@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -258,9 +258,11 @@ function EnterprisesAdminPage() {
         <CardContent>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {(enterprisesQ.data ?? []).map((enterprise: any) => (
-              <button
+              <Link
                 key={enterprise.id}
-                className={`rounded-xl border p-4 text-left transition ${selectedFirm?.id === enterprise.id ? "border-gold bg-gold/10" : "border-border hover:border-navy/40"}`}
+                to="/admin/enterprises/$firmId"
+                params={{ firmId: enterprise.id }}
+                className={`block rounded-xl border p-4 text-left transition ${selectedFirm?.id === enterprise.id ? "border-gold bg-gold/10" : "border-border hover:border-navy/40"}`}
                 onClick={() => setSelectedFirmId(enterprise.id)}
               >
                 <div className="flex items-center gap-2">
@@ -271,7 +273,7 @@ function EnterprisesAdminPage() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   Modules {enterprise.modules_enabled}/{enterprise.modules_total} · Grades {enterprise.grades_total}
                 </p>
-              </button>
+              </Link>
             ))}
           </div>
         </CardContent>
