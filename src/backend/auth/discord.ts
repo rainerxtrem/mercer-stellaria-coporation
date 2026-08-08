@@ -36,26 +36,28 @@ export function getDiscordConfig() {
   return { clientId, clientSecret, guildId, redirectUri, scopes };
 }
 
-export function buildDiscordAuthorizeUrl(state: string): string {
+export function buildDiscordAuthorizeUrl(state: string, redirectUriOverride?: string): string {
   const cfg = getDiscordConfig();
+  const redirectUri = redirectUriOverride?.trim() || cfg.redirectUri;
   const url = new URL("https://discord.com/api/oauth2/authorize");
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", cfg.clientId);
   url.searchParams.set("scope", cfg.scopes);
   url.searchParams.set("state", state);
-  url.searchParams.set("redirect_uri", cfg.redirectUri);
+  url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("prompt", "consent");
   return url.toString();
 }
 
-export async function exchangeDiscordCode(code: string): Promise<DiscordTokenResponse> {
+export async function exchangeDiscordCode(code: string, redirectUriOverride?: string): Promise<DiscordTokenResponse> {
   const cfg = getDiscordConfig();
+  const redirectUri = redirectUriOverride?.trim() || cfg.redirectUri;
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
     client_id: cfg.clientId,
     client_secret: cfg.clientSecret,
-    redirect_uri: cfg.redirectUri,
+    redirect_uri: redirectUri,
   });
 
   const response = await fetch("https://discord.com/api/oauth2/token", {

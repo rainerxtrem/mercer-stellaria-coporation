@@ -4,6 +4,7 @@ import { buildDiscordAuthorizeUrl } from "@/backend/auth/discord";
 
 const STATE_COOKIE = "sba_discord_oauth_state";
 const REDIRECT_COOKIE = "sba_discord_oauth_redirect";
+const CALLBACK_COOKIE = "sba_discord_oauth_callback";
 
 function sanitizeRedirect(value: string | null): string {
   if (!value) return "/portail-client";
@@ -24,11 +25,13 @@ export const Route = createFileRoute("/api/auth/discord/start")({
         const url = new URL(request.url);
         const redirectTo = sanitizeRedirect(url.searchParams.get("redirect_to"));
         const state = crypto.randomUUID();
-        const location = buildDiscordAuthorizeUrl(state);
+        const callbackUri = `${url.origin}/api/auth/discord/callback`;
+        const location = buildDiscordAuthorizeUrl(state, callbackUri);
 
         const headers = new Headers({ Location: location });
         headers.append("Set-Cookie", makeCookie(STATE_COOKIE, state, 600));
         headers.append("Set-Cookie", makeCookie(REDIRECT_COOKIE, redirectTo, 600));
+        headers.append("Set-Cookie", makeCookie(CALLBACK_COOKIE, callbackUri, 600));
 
         return new Response(null, {
           status: 302,

@@ -10,6 +10,7 @@ import { withSession } from "@/backend/db/execute";
 
 const STATE_COOKIE = "sba_discord_oauth_state";
 const REDIRECT_COOKIE = "sba_discord_oauth_redirect";
+const CALLBACK_COOKIE = "sba_discord_oauth_callback";
 const PRIVILEGED_ROLES = new Set([
   "batonnier",
   "avocat",
@@ -70,12 +71,14 @@ export const Route = createFileRoute("/api/auth/discord/callback")({
       GET: async ({ request }) => {
         const stateCookie = readCookie(request, STATE_COOKIE);
         const redirectCookie = readCookie(request, REDIRECT_COOKIE);
+        const callbackCookie = readCookie(request, CALLBACK_COOKIE);
         const url = new URL(request.url);
         const state = url.searchParams.get("state");
         const code = url.searchParams.get("code");
         const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
         headers.append("Set-Cookie", expireCookie(STATE_COOKIE));
         headers.append("Set-Cookie", expireCookie(REDIRECT_COOKIE));
+        headers.append("Set-Cookie", expireCookie(CALLBACK_COOKIE));
 
         if (!state || !stateCookie || state !== stateCookie) {
           return new Response(renderErrorPage("Etat OAuth invalide, veuillez recommencer.").body, {
@@ -91,7 +94,8 @@ export const Route = createFileRoute("/api/auth/discord/callback")({
         }
 
         try {
-          const token = await exchangeDiscordCode(code);
+          const callbackUri = callbackCookie?.trim() || `${url.origin}/api/auth/discord/callback`;
+          const token = await exchangeDiscordCode(code, callbackUri);
           await assertDiscordGuildMembership(token.access_token);
           const discordUser = await getDiscordUser(token.access_token);
 
