@@ -7,10 +7,11 @@ describe("isAccessRelatedMessagingError", () => {
     expect(isAccessRelatedMessagingError(new Error("permission denied"))).toBe(true);
     expect(isAccessRelatedMessagingError(new Error("Conversation introuvable ou non autorisée."))).toBe(true);
     expect(isAccessRelatedMessagingError(new Error("row-level security policy failed"))).toBe(true);
+    expect(isAccessRelatedMessagingError(new Error("Aucune entreprise active sélectionnée."))).toBe(true);
   });
 
   it("ignores unrelated errors", () => {
     expect(isAccessRelatedMessagingError(new Error("network timeout"))).toBe(false);
-    expect(isAccessRelatedMessagingError("unexpected payload")) .toBe(false);
+    expect(isAccessRelatedMessagingError("unexpected payload")).toBe(false);
   });
 });

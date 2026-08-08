@@ -17,5 +17,11 @@ export function isAccessRelatedMessagingError(error: unknown): boolean {
     "no rows",
     "0 rows",
     "not visible",
+    "entreprise active",
+    "active firm",
+    "active enterprise",
+    "active_firm_id",
+    "aucune entreprise",
+    "no active",
   ].some((fragment) => normalized.includes(fragment));
 }
