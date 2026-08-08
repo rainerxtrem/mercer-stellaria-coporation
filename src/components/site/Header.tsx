@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
-import { Menu, X, ShieldCheck, LogIn, LogOut, LayoutDashboard, User as UserIcon, FolderOpen, Users, FileText, Gauge } from "lucide-react";
+import { Menu, X, ShieldCheck, LogOut, LayoutDashboard, User as UserIcon, FolderOpen, Users, FileText, Gauge } from "lucide-react";
 import logo from "@/assets/ms-logo.png";
 import { BRAND } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
@@ -97,16 +97,11 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            !onHome && (
-              <div className="flex items-center gap-2">
-                <Button asChild size="sm" className="press bg-navy text-white hover:bg-navy-soft">
-                  <Link to="/auth"><LogIn className="mr-1.5 h-4 w-4" />Connexion</Link>
-                </Button>
-                <Button asChild variant="ghost" size="sm" className="text-foreground/85 hover:text-foreground">
-                  <Link to="/inscription">Créer un compte</Link>
-                </Button>
-              </div>
-            )
+            <div className="flex items-center gap-2">
+              <Button asChild variant="ghost" size="sm" className="text-foreground/85 hover:text-foreground">
+                <Link to="/inscription">Créer un compte</Link>
+              </Button>
+            </div>
           )}
         </div>
         <button className="xl:hidden" onClick={() => setOpen((v) => !v)} aria-label="Menu">
@@ -145,16 +140,9 @@ export function Header() {
                 </>
               ) : (
                 <>
-                  {!onHome && (
-                    <>
-                      <Button asChild className="bg-navy text-white">
-                        <Link to="/auth" onClick={() => setOpen(false)}>Connexion</Link>
-                      </Button>
-                      <Button asChild variant="ghost">
-                        <Link to="/inscription" onClick={() => setOpen(false)}>Créer un compte</Link>
-                      </Button>
-                    </>
-                  )}
+                  <Button asChild variant="ghost">
+                    <Link to="/inscription" onClick={() => setOpen(false)}>Créer un compte</Link>
+                  </Button>
                 </>
               )}
             </div>
