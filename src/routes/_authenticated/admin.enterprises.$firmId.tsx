@@ -254,6 +254,14 @@ function EnterpriseDetailPage() {
     return <div className="py-8 text-sm text-muted-foreground">Chargement de l'entreprise...</div>;
   }
 
+  if (detailQ.isError) {
+    return (
+      <div className="py-8 text-sm text-destructive">
+        {(detailQ.error as Error)?.message || "Erreur de chargement de l'entreprise."}
+      </div>
+    );
+  }
+
   if (!firm) {
     return <div className="py-8 text-sm text-muted-foreground">Entreprise introuvable ou inaccessible.</div>;
   }

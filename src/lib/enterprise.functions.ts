@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { withSession } from "@/backend/db/execute";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type Ctx = { supabase: any; userId: string };
+type Ctx = { supabase: any; userId: string; claims?: Record<string, unknown> };
 
 async function isBatonnier(context: Ctx) {
   const { data, error } = await context.supabase
@@ -24,11 +25,24 @@ async function assertBatonnier(context: Ctx) {
 }
 
 async function assertEnterpriseManager(context: Ctx, firmId: string) {
-  const { data: allowed, error } = await context.supabase.rpc("can_manage_enterprise", {
-    _firm_id: firmId,
-    _user_id: context.userId,
-  });
-  if (error) throw new Error(error.message);
+  const allowed = await withSession(
+    {
+      role: "authenticated",
+      claims: {
+        ...(context.claims ?? {}),
+        sub: context.userId,
+        role: "authenticated",
+      },
+    },
+    async (client) => {
+      const { rows } = await client.query<{ allowed: boolean }>(
+        "select app_private.can_manage_enterprise($1, $2) as allowed",
+        [firmId, context.userId],
+      );
+      return Boolean(rows[0]?.allowed);
+    },
+  );
+
   if (!allowed) throw new Error("Acces refuse: gestion entreprise requise.");
 }
 

@@ -208,6 +208,84 @@ describe("Multi-entreprise modulaire", () => {
     expect(allowedFlag).toBe(true);
   });
 
+  it.skipIf(!canAuthenticate)("n'autorise la gestion detail entreprise que pour l'entreprise autorisee", async () => {
+    const ctx = await seed();
+    const service = createServerClient(SERVICE_CONTEXT);
+
+    const { data: membershipA } = await service
+      .from("enterprise_memberships")
+      .select("id")
+      .eq("user_id", ctx.userA)
+      .eq("firm_id", ctx.firmA)
+      .single();
+
+    let { data: managerGrade } = await service
+      .from("enterprise_grades")
+      .select("id")
+      .eq("firm_id", ctx.firmA)
+      .eq("code", "manager")
+      .maybeSingle();
+
+    if (!managerGrade?.id) {
+      const { data: createdManager, error: managerErr } = await service
+        .from("enterprise_grades")
+        .insert({ firm_id: ctx.firmA, code: `manager_${Date.now()}`, name: "Manager Temp", is_system: false } as never)
+        .select("id")
+        .single();
+      expect(managerErr).toBeNull();
+      managerGrade = createdManager;
+
+      await service
+        .from("enterprise_grade_permissions")
+        .insert({ grade_id: managerGrade!.id, permission_key: "enterprise.manage" } as never);
+    }
+
+    await service.from("enterprise_member_grades").upsert({
+      membership_id: membershipA!.id,
+      grade_id: managerGrade!.id,
+    } as never);
+
+    const allowedManageFlag = await withSession(
+      {
+        role: "authenticated",
+        claims: {
+          sub: ctx.userA,
+          role: "authenticated",
+          session_id: `sess_${ctx.userA.slice(0, 8)}`,
+          firm_id: ctx.firmA,
+        },
+      },
+      async (client) => {
+        const { rows } = await client.query<{ allowed: boolean }>(
+          "select app_private.can_manage_enterprise($1, $2) as allowed",
+          [ctx.firmA, ctx.userA],
+        );
+        return Boolean(rows[0]?.allowed);
+      },
+    );
+    expect(allowedManageFlag).toBe(true);
+
+    const deniedManageFlag = await withSession(
+      {
+        role: "authenticated",
+        claims: {
+          sub: ctx.userB,
+          role: "authenticated",
+          session_id: `sess_${ctx.userB.slice(0, 8)}`,
+          firm_id: ctx.firmB,
+        },
+      },
+      async (client) => {
+        const { rows } = await client.query<{ allowed: boolean }>(
+          "select app_private.can_manage_enterprise($1, $2) as allowed",
+          [ctx.firmA, ctx.userB],
+        );
+        return Boolean(rows[0]?.allowed);
+      },
+    );
+    expect(deniedManageFlag).toBe(false);
+  });
+
   it.skipIf(!canAuthenticate)("supporte creation/modification/suppression de grades independants par entreprise", async () => {
     const ctx = await seed();
     const service = createServerClient(SERVICE_CONTEXT);
