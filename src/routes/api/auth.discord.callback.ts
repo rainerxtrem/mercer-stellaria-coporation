@@ -8,9 +8,10 @@ import {
 import { issueSessionForUserId } from "@/backend/auth/service";
 import { withSession } from "@/backend/db/execute";
 
-const STATE_COOKIE = "sba_discord_oauth_state";
-const REDIRECT_COOKIE = "sba_discord_oauth_redirect";
-const CALLBACK_COOKIE = "sba_discord_oauth_callback";
+const OAUTH_COOKIE = "sba_discord_oauth";
+const LEGACY_STATE_COOKIE = "sba_discord_oauth_state";
+const LEGACY_REDIRECT_COOKIE = "sba_discord_oauth_redirect";
+const LEGACY_CALLBACK_COOKIE = "sba_discord_oauth_callback";
 const PRIVILEGED_ROLES = new Set([
   "batonnier",
   "avocat",
@@ -33,6 +34,35 @@ function readCookie(request: Request, name: string): string | null {
 function expireCookie(name: string): string {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+}
+
+function decodeOAuthContext(value: string | null): {
+  state: string;
+  redirectTo: string;
+  callbackUri: string;
+} | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as {
+      state?: unknown;
+      redirectTo?: unknown;
+      callbackUri?: unknown;
+    };
+    if (
+      typeof parsed.state === "string" &&
+      typeof parsed.redirectTo === "string" &&
+      typeof parsed.callbackUri === "string"
+    ) {
+      return {
+        state: parsed.state,
+        redirectTo: parsed.redirectTo,
+        callbackUri: parsed.callbackUri,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function sanitizeRedirect(value: string | null): string {
@@ -69,18 +99,24 @@ export const Route = createFileRoute("/api/auth/discord/callback")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const stateCookie = readCookie(request, STATE_COOKIE);
-        const redirectCookie = readCookie(request, REDIRECT_COOKIE);
-        const callbackCookie = readCookie(request, CALLBACK_COOKIE);
+        const contextCookie = decodeOAuthContext(readCookie(request, OAUTH_COOKIE));
+        const legacyStateCookie = readCookie(request, LEGACY_STATE_COOKIE);
+        const legacyRedirectCookie = readCookie(request, LEGACY_REDIRECT_COOKIE);
+        const legacyCallbackCookie = readCookie(request, LEGACY_CALLBACK_COOKIE);
         const url = new URL(request.url);
         const state = url.searchParams.get("state");
         const code = url.searchParams.get("code");
         const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
-        headers.append("Set-Cookie", expireCookie(STATE_COOKIE));
-        headers.append("Set-Cookie", expireCookie(REDIRECT_COOKIE));
-        headers.append("Set-Cookie", expireCookie(CALLBACK_COOKIE));
+        headers.append("Set-Cookie", expireCookie(OAUTH_COOKIE));
+        headers.append("Set-Cookie", expireCookie(LEGACY_STATE_COOKIE));
+        headers.append("Set-Cookie", expireCookie(LEGACY_REDIRECT_COOKIE));
+        headers.append("Set-Cookie", expireCookie(LEGACY_CALLBACK_COOKIE));
 
-        if (!state || !stateCookie || state !== stateCookie) {
+        const expectedState = contextCookie?.state ?? legacyStateCookie;
+        const redirectTo = sanitizeRedirect(contextCookie?.redirectTo ?? legacyRedirectCookie ?? "/portail-client");
+        const callbackUri = (contextCookie?.callbackUri ?? legacyCallbackCookie ?? `${url.origin}/api/auth/discord/callback`).trim();
+
+        if (!state || !expectedState || state !== expectedState) {
           return new Response(renderErrorPage("Etat OAuth invalide, veuillez recommencer.").body, {
             status: 400,
             headers,
@@ -94,7 +130,6 @@ export const Route = createFileRoute("/api/auth/discord/callback")({
         }
 
         try {
-          const callbackUri = callbackCookie?.trim() || `${url.origin}/api/auth/discord/callback`;
           const token = await exchangeDiscordCode(code, callbackUri);
           await assertDiscordGuildMembership(token.access_token);
           const discordUser = await getDiscordUser(token.access_token);
@@ -158,7 +193,6 @@ export const Route = createFileRoute("/api/auth/discord/callback")({
           });
 
           const session = await issueSessionForUserId(linked.profile_id);
-          const redirectTo = sanitizeRedirect(redirectCookie ?? "/portail-client");
           const payload = JSON.stringify(session).replace(/</g, "\\u003c");
           const html = `<!doctype html>
 <html><head><meta charset="utf-8" /><title>Connexion...</title></head>

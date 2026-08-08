@@ -2,9 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { buildDiscordAuthorizeUrl, getDiscordConfig } from "@/backend/auth/discord";
 
-const STATE_COOKIE = "sba_discord_oauth_state";
-const REDIRECT_COOKIE = "sba_discord_oauth_redirect";
-const CALLBACK_COOKIE = "sba_discord_oauth_callback";
+const OAUTH_COOKIE = "sba_discord_oauth";
 
 function sanitizeRedirect(value: string | null): string {
   if (!value) return "/portail-client";
@@ -18,6 +16,10 @@ function makeCookie(name: string, value: string, maxAgeSeconds: number): string 
   return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
 }
 
+function encodeOAuthContext(payload: { state: string; redirectTo: string; callbackUri: string }): string {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
 export const Route = createFileRoute("/api/auth/discord/start")({
   server: {
     handlers: {
@@ -28,11 +30,14 @@ export const Route = createFileRoute("/api/auth/discord/start")({
 
         const state = crypto.randomUUID();
         const location = buildDiscordAuthorizeUrl(state);
+        const context = encodeOAuthContext({
+          state,
+          redirectTo,
+          callbackUri: cfg.redirectUri,
+        });
 
         const headers = new Headers({ Location: location });
-        headers.append("Set-Cookie", makeCookie(STATE_COOKIE, state, 600));
-        headers.append("Set-Cookie", makeCookie(REDIRECT_COOKIE, redirectTo, 600));
-        headers.append("Set-Cookie", makeCookie(CALLBACK_COOKIE, cfg.redirectUri, 600));
+        headers.append("Set-Cookie", makeCookie(OAUTH_COOKIE, context, 600));
 
         return new Response(null, {
           status: 302,
