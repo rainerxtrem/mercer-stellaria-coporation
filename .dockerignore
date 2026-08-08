@@ -1,0 +1,32 @@
+.git
+.github
+node_modules
+.output
+.nitro
+.vinxi
+.tanstack
+dist
+dist-ssr
+
+# Local secrets and data must never enter the image
+.env
+.env.*
+!.env.example
+.data
+data
+
+# Tests and reports
+tests
+test-results
+playwright-report
+playwright.config.ts
+
+# Editor / OS
+.vscode
+.idea
+.DS_Store
+*.log
+
+# Docs
+README.md
+AGENTS.md

@@ -1,0 +1,2 @@
+ALTER TABLE public.matters DROP CONSTRAINT IF EXISTS matters_status_check;
+ALTER TABLE public.matters ADD CONSTRAINT matters_status_check CHECK (status = ANY (ARRAY['open'::text, 'pending'::text, 'instance'::text, 'closed'::text, 'archived'::text]));
