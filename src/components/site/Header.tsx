@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { Menu, X, ShieldCheck, LogIn, LogOut, LayoutDashboard, User as UserIcon, FolderOpen, Users, FileText, Gauge } from "lucide-react";
 import logo from "@/assets/ms-logo.png";
@@ -17,7 +17,7 @@ import {
 
 const NAV = [
   { to: "/", label: "Accueil" },
-  { to: "/cabinet", label: "Avocats" },
+  { to: "/avocats", label: "Avocats" },
   { to: "/assurances", label: "Assurances" },
   { to: "/investment", label: "Investissement" },
 ] as const;
@@ -27,6 +27,8 @@ export function Header() {
   const session = useSession();
   const isAdmin = useIsBatonnier();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onHome = pathname === "/";
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -52,10 +54,12 @@ export function Header() {
           ))}
         </nav>
         <div className="hidden md:flex items-center gap-2">
-          {session && <GlobalSearch />}
-          <Button asChild variant="outline" size="sm" className="press border-gold/50 text-gold transition-colors hover:bg-gold hover:text-[#0a0e16]">
-            <Link to="/connexion"><ShieldCheck className="mr-1.5 h-4 w-4" />Connexion Espaces Clients</Link>
-          </Button>
+          {session && !onHome && <GlobalSearch />}
+          {!session && (
+            <Button asChild variant="outline" size="sm" className="press border-gold/50 text-gold transition-colors hover:bg-gold hover:text-[#0a0e16]">
+              <Link to="/connexion"><ShieldCheck className="mr-1.5 h-4 w-4" />Connexion Espaces Clients</Link>
+            </Button>
+          )}
           {session && <NotificationsBell />}
           {session ? (
             <DropdownMenu>
@@ -121,9 +125,11 @@ export function Header() {
               </Link>
             ))}
             <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-              <Button asChild variant="outline" className="border-gold/50 text-gold">
-                <Link to="/connexion" onClick={() => setOpen(false)}>Connexion Espaces Clients</Link>
-              </Button>
+              {!session && (
+                <Button asChild variant="outline" className="border-gold/50 text-gold">
+                  <Link to="/connexion" onClick={() => setOpen(false)}>Connexion Espaces Clients</Link>
+                </Button>
+              )}
               {session ? (
                 <>
                   {isAdmin && (

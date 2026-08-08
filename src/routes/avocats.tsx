@@ -73,6 +73,14 @@ function Page() {
     <>
       <PageHeader eyebrow="Registre officiel" title="Avocats inscrits" description="Consultez l'ensemble des avocats inscrits au Mercer & Stellaria Corporation." />
       <section className="container-page py-12">
+        <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-card)] md:p-6">
+          <h2 className="font-display text-xl font-bold text-navy-deep">Présentation du pôle Avocats</h2>
+          <p className="mt-2 text-sm text-muted-foreground md:text-base">
+            Le Mercer & Stellaria Law Office accompagne les entreprises et les particuliers en conseil, contentieux,
+            gouvernance et conformité. Cette page donne accès au registre officiel et aux profils professionnels.
+          </p>
+        </div>
+
         <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-card)] md:p-6">
           <div className="grid gap-3 md:grid-cols-4">
             <div className="relative md:col-span-2">
