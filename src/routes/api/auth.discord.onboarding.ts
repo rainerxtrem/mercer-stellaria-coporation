@@ -15,7 +15,7 @@ const payloadSchema = z.object({
   first_name: z.string().trim().min(1).max(120),
   last_name: z.string().trim().min(1).max(120),
   birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  unique_id: z.string().trim().min(1).max(64),
+  unique_id: z.string().trim().min(3).max(64),
 });
 
 function normalizeName(value: string): string {
@@ -24,12 +24,6 @@ function normalizeName(value: string): string {
 
 function normalizeUniqueId(value: string): string {
   return value.trim().toUpperCase();
-}
-
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
 }
 
 async function ensureClientRole(userId: string): Promise<void> {
@@ -97,32 +91,42 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
         const normalizedUniqueId = normalizeUniqueId(data.unique_id);
         const normalizedFirstName = normalizeName(data.first_name);
         const normalizedLastName = normalizeName(data.last_name);
-        const uniqueLength = Math.min(Math.max(normalizedUniqueId.length, 4), 32);
+
+        if (!/^[A-Z0-9_-]+$/.test(normalizedUniqueId)) {
+          return new Response(
+            JSON.stringify({ ok: false, message: "L'ID unique ne peut contenir que des lettres, des chiffres, _ ou -." }),
+            { status: 422, headers },
+          );
+        }
 
         try {
           const clientRecord = await withSession({ role: "service", claims: null }, async (client) => {
-            const rowShape = `id, first_name, last_name, birth_date::text, email, profile_id, firm_id, discord_user_id`;
+            const rowShape = `id, first_name, last_name, birth_date::text, email, profile_id, firm_id, discord_user_id, portal_unique_id`;
 
-            const byUuid = isUuid(normalizedUniqueId)
-              ? await client.query<{
-                  id: string;
-                  first_name: string;
-                  last_name: string;
-                  birth_date: string | null;
-                  email: string | null;
-                  profile_id: string | null;
-                  firm_id: string | null;
-                  discord_user_id: string | null;
-                }>(
-                  `SELECT ${rowShape}
-                     FROM public.clients
-                    WHERE id = $1
-                    LIMIT 1`,
-                  [normalizedUniqueId],
-                )
-              : null;
+            const duplicateUniqueId = await client.query<{
+              id: string;
+              first_name: string;
+              last_name: string;
+              birth_date: string | null;
+            }>(
+              `SELECT id, first_name, last_name, birth_date::text
+                 FROM public.clients
+                WHERE upper(portal_unique_id) = $1
+                LIMIT 1`,
+              [normalizedUniqueId],
+            );
 
-            if (byUuid?.rows?.[0]) return byUuid.rows[0];
+            const duplicate = duplicateUniqueId.rows[0] ?? null;
+            if (
+              duplicate &&
+              !(
+                normalizeName(duplicate.first_name) === normalizedFirstName &&
+                normalizeName(duplicate.last_name) === normalizedLastName &&
+                String(duplicate.birth_date ?? "") === data.birth_date
+              )
+            ) {
+              throw new Error("unique_id_taken");
+            }
 
             const { rows } = await client.query<{
               id: string;
@@ -133,23 +137,33 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
               profile_id: string | null;
               firm_id: string | null;
               discord_user_id: string | null;
+              portal_unique_id: string | null;
             }>(
               `SELECT ${rowShape}
                  FROM public.clients
                 WHERE lower(trim(first_name)) = $1
                   AND lower(trim(last_name)) = $2
                   AND birth_date = $3::date
-                  AND right(upper(replace(id::text, '-', '')), $4) = $5
+                  AND firm_id IS NOT NULL
                 LIMIT 2`,
-              [normalizedFirstName, normalizedLastName, data.birth_date, uniqueLength, normalizedUniqueId],
+              [normalizedFirstName, normalizedLastName, data.birth_date],
             );
+
+            if (rows.length > 1) {
+              const exactUnique = rows.filter(
+                (r) => normalizeUniqueId(r.portal_unique_id ?? "") === normalizedUniqueId,
+              );
+              if (exactUnique.length === 1) return exactUnique[0];
+              throw new Error("identity_ambiguous");
+            }
+
             if (rows.length !== 1) return null;
             return rows[0];
           });
 
           if (!clientRecord || !clientRecord.firm_id) {
             return new Response(
-              JSON.stringify({ ok: false, message: "Client introuvable. Vérifiez votre ID unique." }),
+              JSON.stringify({ ok: false, message: "Client introuvable. Vérifiez vos informations." }),
               { status: 404, headers },
             );
           }
@@ -163,6 +177,14 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
             return new Response(
               JSON.stringify({ ok: false, message: "Les informations ne correspondent pas à la fiche client." }),
               { status: 403, headers },
+            );
+          }
+
+          const currentUniqueId = normalizeUniqueId(clientRecord.portal_unique_id ?? "");
+          if (currentUniqueId && currentUniqueId !== normalizedUniqueId) {
+            return new Response(
+              JSON.stringify({ ok: false, message: "Cet ID unique est déjà utilisé." }),
+              { status: 409, headers },
             );
           }
 
@@ -205,9 +227,10 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
               `UPDATE public.clients
                   SET discord_user_id = $2,
                       discord_username = $3,
+                      portal_unique_id = COALESCE(portal_unique_id, $4),
                       updated_at = now()
                 WHERE id = $1`,
-              [clientRecord.id, context.discordUserId, context.discordUsername],
+              [clientRecord.id, context.discordUserId, context.discordUsername, normalizedUniqueId],
             );
           });
 
@@ -221,7 +244,21 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
             }),
             { status: 200, headers },
           );
-        } catch {
+        } catch (error) {
+          if (error instanceof Error && error.message === "unique_id_taken") {
+            return new Response(
+              JSON.stringify({ ok: false, message: "Cet ID unique existe déjà. Choisissez-en un autre." }),
+              { status: 409, headers },
+            );
+          }
+
+          if (error instanceof Error && error.message === "identity_ambiguous") {
+            return new Response(
+              JSON.stringify({ ok: false, message: "Plusieurs fiches correspondent. Contactez votre cabinet." }),
+              { status: 409, headers },
+            );
+          }
+
           return new Response(
             JSON.stringify({ ok: false, message: "Inscription impossible pour le moment. Réessayez." }),
             { status: 500, headers },

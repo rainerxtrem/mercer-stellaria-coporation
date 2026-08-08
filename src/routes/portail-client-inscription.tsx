@@ -108,7 +108,7 @@ function ClientPortalOnboardingPage() {
                   required
                   value={uniqueId}
                   onChange={(e) => setUniqueId(e.target.value)}
-                  placeholder="Identifiant client"
+                  placeholder="Choisissez votre ID unique"
                 />
               </div>
 
