@@ -16,6 +16,7 @@ import {
   markProfessionalConversationRead,
   sendProfessionalGeneralMessage,
 } from "@/lib/professional-messaging.functions";
+import { isAccessRelatedMessagingError } from "@/lib/professional-messaging.utils";
 
 type Thread = {
   kind: "general" | "matter";
@@ -41,7 +42,16 @@ export function ProfessionalMessaging() {
   const threadsQ = useQuery({
     queryKey: ["professional-messaging", activeFirmId, "threads"],
     enabled: Boolean(activeFirmId) && !enterpriseLoading,
-    queryFn: () => threadsFn(),
+    queryFn: async () => {
+      try {
+        return await threadsFn();
+      } catch (error) {
+        if (isAccessRelatedMessagingError(error)) {
+          return { user_id: session?.user?.id ?? null, general: [], matters: [] };
+        }
+        throw error;
+      }
+    },
     refetchInterval: 4000,
   });
   const threads = useMemo<Thread[]>(() => {
@@ -91,19 +101,33 @@ export function ProfessionalMessaging() {
   const generalQ = useQuery({
     queryKey: ["professional-messaging", activeFirmId, "general", selectedGeneralId],
     enabled: Boolean(selectedGeneralId),
-    queryFn: () =>
-      selectedGeneralId
-        ? generalMessagesFn({ data: { conversation_id: selectedGeneralId } })
-        : Promise.resolve([]),
+    queryFn: async () => {
+      if (!selectedGeneralId) return [];
+      try {
+        return await generalMessagesFn({ data: { conversation_id: selectedGeneralId } });
+      } catch (error) {
+        if (isAccessRelatedMessagingError(error)) {
+          return [];
+        }
+        throw error;
+      }
+    },
     refetchInterval: 2500,
   });
   const matterQ = useQuery({
     queryKey: ["professional-messaging", activeFirmId, "matter", selectedMatterId],
     enabled: Boolean(selectedMatterId),
-    queryFn: () =>
-      selectedMatterId
-        ? matterMessagesFn({ data: { matter_id: selectedMatterId } })
-        : Promise.resolve([]),
+    queryFn: async () => {
+      if (!selectedMatterId) return [];
+      try {
+        return await matterMessagesFn({ data: { matter_id: selectedMatterId } });
+      } catch (error) {
+        if (isAccessRelatedMessagingError(error)) {
+          return [];
+        }
+        throw error;
+      }
+    },
     refetchInterval: 2500,
   });
   const selectedMessages = selected?.kind === "general" ? generalQ.data : matterQ.data;

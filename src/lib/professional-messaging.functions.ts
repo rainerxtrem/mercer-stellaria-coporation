@@ -5,6 +5,7 @@ import { z } from "zod";
 import { withActorNames } from "@/lib/activity-log";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { withSession } from "@/backend/db/execute";
+import { isAccessRelatedMessagingError } from "@/lib/professional-messaging.utils";
 
 type Context = { supabase: any; userId: string; claims?: Record<string, unknown> };
 
@@ -84,8 +85,18 @@ export const listProfessionalMessagingThreads = createServerFn({ method: "GET" }
             .order("updated_at", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
     ]);
-    if (conversationsError) throw new Error(conversationsError.message);
-    if (mattersResult.error) throw new Error(mattersResult.error.message);
+    if (conversationsError) {
+      if (isAccessRelatedMessagingError(conversationsError.message)) {
+        return { user_id: context.userId, general: [], matters: [] };
+      }
+      throw new Error(conversationsError.message);
+    }
+    if (mattersResult.error) {
+      if (isAccessRelatedMessagingError(mattersResult.error.message)) {
+        return { user_id: context.userId, general: conversations ?? [], matters: [] };
+      }
+      throw new Error(mattersResult.error.message);
+    }
     const matters = mattersResult.data ?? [];
 
     const conversationIds = (conversations ?? []).map((row: any) => row.id);
@@ -143,7 +154,14 @@ export const listProfessionalGeneralMessages = createServerFn({ method: "GET" })
     conversation_id: z.string().uuid().parse(data.conversation_id),
   }))
   .handler(async ({ data, context }) => {
-    await firmConversation(context as Context, data.conversation_id);
+    try {
+      await firmConversation(context as Context, data.conversation_id);
+    } catch (error) {
+      if (isAccessRelatedMessagingError(error)) {
+        return [];
+      }
+      throw error;
+    }
     const { data: rows, error } = await context.supabase
       .from("client_conversation_messages")
       .select(
@@ -152,7 +170,12 @@ export const listProfessionalGeneralMessages = createServerFn({ method: "GET" })
       .eq("conversation_id", data.conversation_id)
       .order("created_at", { ascending: true })
       .limit(500);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isAccessRelatedMessagingError(error.message)) {
+        return [];
+      }
+      throw new Error(error.message);
+    }
     return withActorNames(context.supabase, rows ?? [], { author_id: "author_name" });
   });
 
@@ -163,7 +186,15 @@ export const sendProfessionalGeneralMessage = createServerFn({ method: "POST" })
     body: z.string().trim().min(1, "Le message est vide").max(5000).parse(data.body),
   }))
   .handler(async ({ data, context }) => {
-    const conversation = await firmConversation(context as Context, data.conversation_id);
+    let conversation;
+    try {
+      conversation = await firmConversation(context as Context, data.conversation_id);
+    } catch (error) {
+      if (isAccessRelatedMessagingError(error)) {
+        return { id: null };
+      }
+      throw error;
+    }
     const { data: created, error } = await context.supabase
       .from("client_conversation_messages")
       .insert({ conversation_id: conversation.id, author_id: context.userId, body: data.body })
@@ -194,11 +225,18 @@ export const markProfessionalConversationRead = createServerFn({ method: "POST" 
     conversation_id: z.string().uuid().parse(data.conversation_id),
   }))
   .handler(async ({ data, context }) => {
-    const conversation = await firmConversation(context as Context, data.conversation_id);
+    try {
+      await firmConversation(context as Context, data.conversation_id);
+    } catch (error) {
+      if (isAccessRelatedMessagingError(error)) {
+        return { ok: true };
+      }
+      throw error;
+    }
     const { error } = await context.supabase
       .from("client_conversations")
       .update({ staff_last_read_at: new Date().toISOString() })
-      .eq("id", conversation.id);
+      .eq("id", data.conversation_id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
