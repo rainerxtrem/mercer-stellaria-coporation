@@ -18,6 +18,16 @@ type DiscordGuild = {
   name: string;
 };
 
+type DiscordGuildRole = {
+  id: string;
+  name: string;
+};
+
+type DiscordGuildMember = {
+  user?: { id?: string };
+  roles?: string[];
+};
+
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Missing environment variable: ${name}`);
@@ -100,6 +110,17 @@ async function discordGet<T>(path: string, accessToken: string): Promise<T> {
   return payload as unknown as T;
 }
 
+async function discordBotGet<T>(path: string, botToken: string): Promise<T> {
+  const response = await fetch(`https://discord.com/api/v10${path}`, {
+    headers: { Authorization: `Bot ${botToken}` },
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error((payload.message as string) ?? `Discord API error (${response.status})`);
+  }
+  return payload as unknown as T;
+}
+
 export async function getDiscordUser(accessToken: string): Promise<DiscordUser> {
   return discordGet<DiscordUser>("/users/@me", accessToken);
 }
@@ -116,4 +137,27 @@ export async function assertDiscordGuildMembership(accessToken: string): Promise
   if (!inGuild) {
     throw new Error("Discord account is not a member of the configured server.");
   }
+}
+
+export async function listDiscordGuildMemberRoleNames(discordUserId: string): Promise<string[]> {
+  const guildId = process.env.DISCORD_GUILD_ID?.trim() || "";
+  const botToken = process.env.DISCORD_BOT_TOKEN?.trim() || "";
+  if (!guildId || !botToken) return [];
+
+  const [roles, member] = await Promise.all([
+    discordBotGet<DiscordGuildRole[]>(`/guilds/${guildId}/roles`, botToken),
+    discordBotGet<DiscordGuildMember>(`/guilds/${guildId}/members/${discordUserId}`, botToken),
+  ]);
+
+  const roleNameById = new Map<string, string>();
+  for (const role of roles ?? []) {
+    roleNameById.set(role.id, role.name);
+  }
+
+  const names: string[] = [];
+  for (const roleId of member.roles ?? []) {
+    const roleName = roleNameById.get(roleId);
+    if (roleName) names.push(roleName);
+  }
+  return names;
 }

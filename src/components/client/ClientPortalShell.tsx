@@ -1,11 +1,13 @@
 import { type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Bell, FileCheck2, Files, LayoutDashboard, LogOut, MessageSquare, Scale } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { useSession, signOut } from "@/lib/auth";
+import { getClientProfile } from "@/lib/client-portal.functions";
 
 type PortalNavItem = {
   to: string;
@@ -26,6 +28,16 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const profileFn = useServerFn(getClientProfile);
+  const profileQ = useQuery({ queryKey: ["client-portal", "profile", "shell"], queryFn: () => profileFn() });
+  const fullName = [profileQ.data?.first_name, profileQ.data?.last_name].filter(Boolean).join(" ").trim();
+  const displayName = fullName || "Client";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
 
   return (
     <div className="min-h-screen bg-[#070b14] text-zinc-100">
@@ -36,7 +48,12 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
               <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-400">Mercer & Stellaria</p>
               <h1 className="mt-1 font-display text-lg font-semibold text-zinc-50">Portail Client</h1>
             </div>
-            <Badge className="border border-amber-500/40 bg-amber-500/10 text-amber-300">Espace isole</Badge>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/25 font-semibold text-amber-100">
+                {initials || "CL"}
+              </span>
+              <span className="max-w-[140px] truncate">{displayName}</span>
+            </div>
           </div>
           <Separator className="bg-zinc-800/80" />
           <nav className="grid gap-1 px-3 py-3">
@@ -60,7 +77,9 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
           </nav>
           <Separator className="bg-zinc-800/80" />
           <div className="space-y-3 px-4 py-4 text-xs text-zinc-400">
-            <p className="truncate">{session?.user.email ?? "client"}</p>
+            <p className="truncate">{displayName}</p>
+            {profileQ.data?.firm_name ? <p className="truncate text-zinc-500">{profileQ.data.firm_name}</p> : null}
+            <p className="truncate text-zinc-500">{session?.user.email ?? ""}</p>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="border-zinc-700 bg-transparent text-zinc-200" asChild>
                 <Link to="/">Site public</Link>

@@ -21,10 +21,10 @@ function ClientPortalAuthPage() {
           <Card className="border-zinc-800 bg-zinc-950/70 shadow-2xl">
             <CardContent className="p-8">
               <p className="text-xs uppercase tracking-[0.24em] text-amber-300/90">Mercer & Stellaria</p>
-              <h1 className="mt-3 font-display text-3xl font-semibold text-zinc-50">Portail Client Isole</h1>
+              <h1 className="mt-3 font-display text-3xl font-semibold text-zinc-50">Espace Client</h1>
               <p className="mt-3 max-w-prose text-sm leading-relaxed text-zinc-300">
-                Cet espace est reserve aux clients verifies et relies a un compte Discord autorise.
-                La connexion par e-mail et mot de passe est volontairement desactivee.
+                Votre espace client est integre a l'environnement Mercer & Stellaria.
+                Connectez-vous avec Discord pour retrouver vos entreprises, vos dossiers et vos echanges.
               </p>
               <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
                 <p className="flex items-start gap-2">
