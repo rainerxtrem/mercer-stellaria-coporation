@@ -13,17 +13,25 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as ActualitesRouteImport } from './routes/actualites'
 import { Route as AdmissionsRouteImport } from './routes/admissions'
+import { Route as AssurancesRouteImport } from './routes/assurances'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AvocatsRouteImport } from './routes/avocats'
 import { Route as BibliothequeRouteImport } from './routes/bibliotheque'
+import { Route as CabinetRouteImport } from './routes/cabinet'
 import { Route as CabinetsRouteImport } from './routes/cabinets'
+import { Route as CguRouteImport } from './routes/cgu'
+import { Route as ConnexionRouteImport } from './routes/connexion'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DisciplineRouteImport } from './routes/discipline'
 import { Route as EspaceAvocatRouteImport } from './routes/espace-avocat'
 import { Route as EspaceBatonnierRouteImport } from './routes/espace-batonnier'
 import { Route as ExamenRouteImport } from './routes/examen'
 import { Route as FormationsRouteImport } from './routes/formations'
+import { Route as InscriptionRouteImport } from './routes/inscription'
+import { Route as InvestmentRouteImport } from './routes/investment'
 import { Route as LeBarreauRouteImport } from './routes/le-barreau'
+import { Route as MentionsLegalesRouteImport } from './routes/mentions-legales'
+import { Route as PolitiqueConfidentialiteRouteImport } from './routes/politique-confidentialite'
 import { Route as PortailClientRouteImport } from './routes/portail-client'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ServicesRouteImport } from './routes/services'
@@ -111,6 +119,11 @@ const AdmissionsRoute = AdmissionsRouteImport.update({
   path: '/admissions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AssurancesRoute = AssurancesRouteImport.update({
+  id: '/assurances',
+  path: '/assurances',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -126,9 +139,24 @@ const BibliothequeRoute = BibliothequeRouteImport.update({
   path: '/bibliotheque',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CabinetRoute = CabinetRouteImport.update({
+  id: '/cabinet',
+  path: '/cabinet',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CabinetsRoute = CabinetsRouteImport.update({
   id: '/cabinets',
   path: '/cabinets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CguRoute = CguRouteImport.update({
+  id: '/cgu',
+  path: '/cgu',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnexionRoute = ConnexionRouteImport.update({
+  id: '/connexion',
+  path: '/connexion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -161,11 +189,32 @@ const FormationsRoute = FormationsRouteImport.update({
   path: '/formations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InscriptionRoute = InscriptionRouteImport.update({
+  id: '/inscription',
+  path: '/inscription',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvestmentRoute = InvestmentRouteImport.update({
+  id: '/investment',
+  path: '/investment',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LeBarreauRoute = LeBarreauRouteImport.update({
   id: '/le-barreau',
   path: '/le-barreau',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MentionsLegalesRoute = MentionsLegalesRouteImport.update({
+  id: '/mentions-legales',
+  path: '/mentions-legales',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PolitiqueConfidentialiteRoute =
+  PolitiqueConfidentialiteRouteImport.update({
+    id: '/politique-confidentialite',
+    path: '/politique-confidentialite',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const PortailClientRoute = PortailClientRouteImport.update({
   id: '/portail-client',
   path: '/portail-client',
@@ -545,17 +594,25 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/actualites': typeof ActualitesRoute
   '/admissions': typeof AdmissionsRoute
+  '/assurances': typeof AssurancesRoute
   '/auth': typeof AuthRoute
   '/avocats': typeof AvocatsRouteWithChildren
   '/bibliotheque': typeof BibliothequeRoute
+  '/cabinet': typeof CabinetRoute
   '/cabinets': typeof CabinetsRoute
+  '/cgu': typeof CguRoute
+  '/connexion': typeof ConnexionRoute
   '/contact': typeof ContactRoute
   '/discipline': typeof DisciplineRoute
   '/espace-avocat': typeof EspaceAvocatRoute
   '/espace-batonnier': typeof EspaceBatonnierRoute
   '/examen': typeof ExamenRoute
   '/formations': typeof FormationsRoute
+  '/inscription': typeof InscriptionRoute
+  '/investment': typeof InvestmentRoute
   '/le-barreau': typeof LeBarreauRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
+  '/politique-confidentialite': typeof PolitiqueConfidentialiteRoute
   '/portail-client': typeof PortailClientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
@@ -628,17 +685,25 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/actualites': typeof ActualitesRoute
   '/admissions': typeof AdmissionsRoute
+  '/assurances': typeof AssurancesRoute
   '/auth': typeof AuthRoute
   '/avocats': typeof AvocatsRouteWithChildren
   '/bibliotheque': typeof BibliothequeRoute
+  '/cabinet': typeof AuthenticatedCabinetIndexRoute
   '/cabinets': typeof CabinetsRoute
+  '/cgu': typeof CguRoute
+  '/connexion': typeof ConnexionRoute
   '/contact': typeof ContactRoute
   '/discipline': typeof DisciplineRoute
   '/espace-avocat': typeof EspaceAvocatRoute
   '/espace-batonnier': typeof EspaceBatonnierRoute
   '/examen': typeof ExamenRoute
   '/formations': typeof FormationsRoute
+  '/inscription': typeof InscriptionRoute
+  '/investment': typeof InvestmentRoute
   '/le-barreau': typeof LeBarreauRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
+  '/politique-confidentialite': typeof PolitiqueConfidentialiteRoute
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
   '/signalement': typeof SignalementRoute
@@ -689,7 +754,6 @@ export interface FileRoutesByTo {
   '/portail-client/dossiers/$matterId': typeof PortailClientDossiersMatterIdRoute
   '/verification/facture/$token': typeof VerificationFactureTokenRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
-  '/cabinet': typeof AuthenticatedCabinetIndexRoute
   '/dossiers': typeof AuthenticatedDossiersIndexRoute
   '/examens': typeof AuthenticatedExamensIndexRoute
   '/facturation': typeof AuthenticatedFacturationIndexRoute
@@ -711,17 +775,25 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/actualites': typeof ActualitesRoute
   '/admissions': typeof AdmissionsRoute
+  '/assurances': typeof AssurancesRoute
   '/auth': typeof AuthRoute
   '/avocats': typeof AvocatsRouteWithChildren
   '/bibliotheque': typeof BibliothequeRoute
+  '/cabinet': typeof CabinetRoute
   '/cabinets': typeof CabinetsRoute
+  '/cgu': typeof CguRoute
+  '/connexion': typeof ConnexionRoute
   '/contact': typeof ContactRoute
   '/discipline': typeof DisciplineRoute
   '/espace-avocat': typeof EspaceAvocatRoute
   '/espace-batonnier': typeof EspaceBatonnierRoute
   '/examen': typeof ExamenRoute
   '/formations': typeof FormationsRoute
+  '/inscription': typeof InscriptionRoute
+  '/investment': typeof InvestmentRoute
   '/le-barreau': typeof LeBarreauRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
+  '/politique-confidentialite': typeof PolitiqueConfidentialiteRoute
   '/portail-client': typeof PortailClientRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
@@ -796,17 +868,25 @@ export interface FileRouteTypes {
     | '/'
     | '/actualites'
     | '/admissions'
+    | '/assurances'
     | '/auth'
     | '/avocats'
     | '/bibliotheque'
+    | '/cabinet'
     | '/cabinets'
+    | '/cgu'
+    | '/connexion'
     | '/contact'
     | '/discipline'
     | '/espace-avocat'
     | '/espace-batonnier'
     | '/examen'
     | '/formations'
+    | '/inscription'
+    | '/investment'
     | '/le-barreau'
+    | '/mentions-legales'
+    | '/politique-confidentialite'
     | '/portail-client'
     | '/reset-password'
     | '/services'
@@ -879,17 +959,25 @@ export interface FileRouteTypes {
     | '/'
     | '/actualites'
     | '/admissions'
+    | '/assurances'
     | '/auth'
     | '/avocats'
     | '/bibliotheque'
+    | '/cabinet'
     | '/cabinets'
+    | '/cgu'
+    | '/connexion'
     | '/contact'
     | '/discipline'
     | '/espace-avocat'
     | '/espace-batonnier'
     | '/examen'
     | '/formations'
+    | '/inscription'
+    | '/investment'
     | '/le-barreau'
+    | '/mentions-legales'
+    | '/politique-confidentialite'
     | '/reset-password'
     | '/services'
     | '/signalement'
@@ -940,7 +1028,6 @@ export interface FileRouteTypes {
     | '/portail-client/dossiers/$matterId'
     | '/verification/facture/$token'
     | '/admin'
-    | '/cabinet'
     | '/dossiers'
     | '/examens'
     | '/facturation'
@@ -961,17 +1048,25 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/actualites'
     | '/admissions'
+    | '/assurances'
     | '/auth'
     | '/avocats'
     | '/bibliotheque'
+    | '/cabinet'
     | '/cabinets'
+    | '/cgu'
+    | '/connexion'
     | '/contact'
     | '/discipline'
     | '/espace-avocat'
     | '/espace-batonnier'
     | '/examen'
     | '/formations'
+    | '/inscription'
+    | '/investment'
     | '/le-barreau'
+    | '/mentions-legales'
+    | '/politique-confidentialite'
     | '/portail-client'
     | '/reset-password'
     | '/services'
@@ -1046,17 +1141,25 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   ActualitesRoute: typeof ActualitesRoute
   AdmissionsRoute: typeof AdmissionsRoute
+  AssurancesRoute: typeof AssurancesRoute
   AuthRoute: typeof AuthRoute
   AvocatsRoute: typeof AvocatsRouteWithChildren
   BibliothequeRoute: typeof BibliothequeRoute
+  CabinetRoute: typeof CabinetRoute
   CabinetsRoute: typeof CabinetsRoute
+  CguRoute: typeof CguRoute
+  ConnexionRoute: typeof ConnexionRoute
   ContactRoute: typeof ContactRoute
   DisciplineRoute: typeof DisciplineRoute
   EspaceAvocatRoute: typeof EspaceAvocatRoute
   EspaceBatonnierRoute: typeof EspaceBatonnierRoute
   ExamenRoute: typeof ExamenRoute
   FormationsRoute: typeof FormationsRoute
+  InscriptionRoute: typeof InscriptionRoute
+  InvestmentRoute: typeof InvestmentRoute
   LeBarreauRoute: typeof LeBarreauRoute
+  MentionsLegalesRoute: typeof MentionsLegalesRoute
+  PolitiqueConfidentialiteRoute: typeof PolitiqueConfidentialiteRoute
   PortailClientRoute: typeof PortailClientRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   ServicesRoute: typeof ServicesRoute
@@ -1103,6 +1206,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdmissionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/assurances': {
+      id: '/assurances'
+      path: '/assurances'
+      fullPath: '/assurances'
+      preLoaderRoute: typeof AssurancesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -1124,11 +1234,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BibliothequeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cabinet': {
+      id: '/cabinet'
+      path: '/cabinet'
+      fullPath: '/cabinet'
+      preLoaderRoute: typeof CabinetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cabinets': {
       id: '/cabinets'
       path: '/cabinets'
       fullPath: '/cabinets'
       preLoaderRoute: typeof CabinetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cgu': {
+      id: '/cgu'
+      path: '/cgu'
+      fullPath: '/cgu'
+      preLoaderRoute: typeof CguRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connexion': {
+      id: '/connexion'
+      path: '/connexion'
+      fullPath: '/connexion'
+      preLoaderRoute: typeof ConnexionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -1173,11 +1304,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FormationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inscription': {
+      id: '/inscription'
+      path: '/inscription'
+      fullPath: '/inscription'
+      preLoaderRoute: typeof InscriptionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/investment': {
+      id: '/investment'
+      path: '/investment'
+      fullPath: '/investment'
+      preLoaderRoute: typeof InvestmentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/le-barreau': {
       id: '/le-barreau'
       path: '/le-barreau'
       fullPath: '/le-barreau'
       preLoaderRoute: typeof LeBarreauRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mentions-legales': {
+      id: '/mentions-legales'
+      path: '/mentions-legales'
+      fullPath: '/mentions-legales'
+      preLoaderRoute: typeof MentionsLegalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/politique-confidentialite': {
+      id: '/politique-confidentialite'
+      path: '/politique-confidentialite'
+      fullPath: '/politique-confidentialite'
+      preLoaderRoute: typeof PolitiqueConfidentialiteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portail-client': {
@@ -1875,17 +2034,25 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   ActualitesRoute: ActualitesRoute,
   AdmissionsRoute: AdmissionsRoute,
+  AssurancesRoute: AssurancesRoute,
   AuthRoute: AuthRoute,
   AvocatsRoute: AvocatsRouteWithChildren,
   BibliothequeRoute: BibliothequeRoute,
+  CabinetRoute: CabinetRoute,
   CabinetsRoute: CabinetsRoute,
+  CguRoute: CguRoute,
+  ConnexionRoute: ConnexionRoute,
   ContactRoute: ContactRoute,
   DisciplineRoute: DisciplineRoute,
   EspaceAvocatRoute: EspaceAvocatRoute,
   EspaceBatonnierRoute: EspaceBatonnierRoute,
   ExamenRoute: ExamenRoute,
   FormationsRoute: FormationsRoute,
+  InscriptionRoute: InscriptionRoute,
+  InvestmentRoute: InvestmentRoute,
   LeBarreauRoute: LeBarreauRoute,
+  MentionsLegalesRoute: MentionsLegalesRoute,
+  PolitiqueConfidentialiteRoute: PolitiqueConfidentialiteRoute,
   PortailClientRoute: PortailClientRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   ServicesRoute: ServicesRoute,

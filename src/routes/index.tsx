@@ -4,13 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import hero from "@/assets/hero-courthouse.jpg";
 import batonnier from "@/assets/batonnier.jpg";
 import logo from "@/assets/ms-logo.png";
+import seal from "@/assets/seal.png";
 import { BRAND } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { listPublishedNews, getPublicStats } from "@/lib/public-content.functions";
 import {
-  Search, ShieldCheck, GraduationCap, Users, Building2, BookOpen,
-  Gavel, HeartHandshake, ScrollText, ArrowRight, Scale,
+  Search, ShieldCheck, Users, Building2, BookOpen,
+  Gavel, HeartHandshake, ScrollText, ArrowRight, Scale, Briefcase,
+  Wallet, Landmark, Lock, BadgeCheck, FileCheck2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -25,16 +27,22 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const SERVICES = [
-  { icon: Users, title: "Registre des conseils", desc: "Consulter l'ensemble des conseils juridiques du groupe.", to: "/avocats" },
-  { icon: Building2, title: "Entités du groupe", desc: "Toutes les structures autorisées à exercer.", to: "/cabinets" },
-  { icon: ShieldCheck, title: "Vérification des licences", desc: "Recherche instantanée du statut d'une licence.", to: "/verification" },
-  { icon: ScrollText, title: "Rejoindre le groupe", desc: "Démarches, conditions et calendrier.", to: "/admissions" },
-  { icon: GraduationCap, title: "Formation continue", desc: "Catalogue et inscriptions.", to: "/formations" },
-  { icon: BookOpen, title: "Bibliothèque juridique", desc: "Codes, lois, jurisprudence et doctrine.", to: "/bibliotheque" },
-  { icon: Gavel, title: "Commission de déontologie", desc: "Procédures et décisions publiées.", to: "/discipline" },
-  { icon: HeartHandshake, title: "Nous contacter", desc: "Formulaire officiel de contact.", to: "/contact" },
-  { icon: GraduationCap, title: "Examen d'admission", desc: "Sessions, épreuves et résultats.", to: "/examen" },
+const QUICK_INSURANCE_ACTIONS = [
+  {
+    title: "Accéder à mon espace",
+    desc: "Contrats, paiements, messagerie conseiller.",
+    to: "/connexion?service=assurance",
+  },
+  {
+    title: "Télécharger une attestation",
+    desc: "Retrouvez vos documents contractuels en quelques clics.",
+    to: "/connexion?service=assurance",
+  },
+  {
+    title: "Déclarer un sinistre",
+    desc: "Lancez votre dossier et joignez les pièces nécessaires.",
+    to: "/connexion?service=assurance",
+  },
 ] as const;
 
 function fr(n: number) { return n.toLocaleString("fr-FR"); }
@@ -63,7 +71,7 @@ function Home() {
         <div className="relative container-page py-24 md:py-36">
           <div className="max-w-3xl text-white">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-gold/35 bg-white/5 px-3.5 py-1.5 text-[11px] uppercase tracking-[0.24em] text-gold-soft backdrop-blur animate-[fade-in_0.6s_var(--ease-premium)_both]">
-              <Scale className="h-3.5 w-3.5" /> {BRAND.kicker}
+              <Scale className="h-3.5 w-3.5" /> Vision de groupe
             </div>
             <div className="flex items-center gap-5">
               <img src={logo} alt="" width={72} height={72} className="hidden h-16 w-16 shrink-0 object-contain animate-[float_6s_ease-in-out_infinite] sm:block" />
@@ -73,17 +81,20 @@ function Home() {
               </h1>
             </div>
             <p className="mt-8 max-w-2xl text-lg text-gold-soft md:text-xl animate-[fade-up_0.9s_var(--ease-premium)_both]">
-              {BRAND.tagline}
+              La base du groupe: une holding qui orchestre le droit, l assurance et l investissement.
+            </p>
+            <p className="mt-4 max-w-2xl text-base text-white/85 md:text-lg animate-[fade-up_0.95s_var(--ease-premium)_both]">
+              Mercer & Stellaria Corporation pilote le Mercer & Stellaria Law Office, Mercer & Stellaria Insurance et Mercer & Stellaria Investment.
             </p>
             <div className="mt-10 flex flex-wrap gap-3 animate-[fade-up_1.05s_var(--ease-premium)_both]">
               <Button asChild size="lg" className="press bg-gold text-[#0a0e16] shadow-[var(--shadow-gold)] hover:bg-gold-soft">
-                <Link to="/avocats"><Search className="mr-2 h-4 w-4" />Trouver un conseil</Link>
+                <Link to="/cabinet"><Search className="mr-2 h-4 w-4" />Le cabinet</Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="press border-white/25 bg-white/5 text-white backdrop-blur transition-colors hover:border-gold/60 hover:bg-white/10">
-                <Link to="/verification"><ShieldCheck className="mr-2 h-4 w-4" />Vérifier une licence</Link>
+                <Link to="/assurances"><ShieldCheck className="mr-2 h-4 w-4" />Assurances</Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="press border-white/25 bg-white/5 text-white backdrop-blur transition-colors hover:border-gold/60 hover:bg-white/10">
-                <Link to="/admissions"><GraduationCap className="mr-2 h-4 w-4" />Rejoindre le groupe</Link>
+                <Link to="/investment"><Landmark className="mr-2 h-4 w-4" />Investment</Link>
               </Button>
             </div>
           </div>
@@ -106,14 +117,15 @@ function Home() {
       <section className="bg-secondary py-20">
         <div className="container-page grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Qui sommes-nous</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Présentation générale du groupe</div>
             <h2 className="mt-2 font-display text-3xl font-bold text-foreground md:text-4xl gold-underline">
-              Une holding au service de vos intérêts
+              Mercer & Stellaria Corporation
             </h2>
             <div className="mt-8 space-y-6 text-foreground/80">
-              <Block title="Mission" text="Protéger le patrimoine, sécuriser les engagements contractuels et défendre les droits de nos clients à travers toutes les entités du groupe." />
-              <Block title="Vision" text="Un groupe privé moderne et discret, réunissant conseil juridique, sécurité, immobilier et stratégie sous une exigence unique d'excellence." />
-              <Block title="Valeurs" text="Discrétion · Rigueur · Excellence · Loyauté · Confidentialité · Performance." />
+              <Block title="Holding" text="Direction stratégique, gouvernance et standards qualité transverses pour toutes les entités." />
+              <Block title="Law Office" text="Conseil, contentieux stratégique, gouvernance et médiation pour dirigeants, entreprises et particuliers." />
+              <Block title="Insurance" text="Protection assurantielle santé, pro et patrimoniale avec parcours digitaux sécurisés." />
+              <Block title="Investment" text="Gestion de patrimoine, private equity et allocation d actifs pour clients privés et institutionnels." />
             </div>
           </div>
           <div className="relative">
@@ -121,9 +133,9 @@ function Home() {
             <div className="relative overflow-hidden rounded-xl border border-border bg-card shadow-[var(--shadow-elegant)]">
               <img src={batonnier} alt="Direction générale de Mercer & Stellaria Corporation" width={800} height={1000} loading="lazy" className="w-full object-cover transition-transform duration-700 hover:scale-[1.03]" />
               <div className="border-t-2 border-gold p-6">
-                <div className="text-xs uppercase tracking-widest text-muted-foreground">Chief Executive Officer</div>
-                <div className="mt-1 font-display text-xl font-bold text-foreground">Alexander Whitmore</div>
-                <div className="text-sm text-muted-foreground">Direction générale du groupe</div>
+                <div className="text-xs uppercase tracking-widest text-muted-foreground">Mercer & Stellaria Corporation</div>
+                <div className="mt-1 font-display text-xl font-bold text-foreground">Synergie des expertises</div>
+                <div className="text-sm text-muted-foreground">Une direction commune, une exécution spécialisée, une expérience client unifiée.</div>
               </div>
             </div>
           </div>
@@ -133,14 +145,33 @@ function Home() {
       <section className="py-20">
         <div className="container-page">
           <div className="max-w-2xl">
-            <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Nos services</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Pôles du groupe</div>
             <h2 className="mt-2 font-display text-3xl font-bold text-foreground md:text-4xl gold-underline">
-              Une plateforme unique pour toutes nos entités
+              HOLDING | LAW OFFICE | INSURANCE | INVESTMENT
             </h2>
           </div>
-          <div className="stagger-children mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {SERVICES.map((s) => (
-              <Link key={s.title} to={s.to} className="group">
+          <div className="stagger-children mt-12 grid gap-6 md:grid-cols-3">
+            {[
+              {
+                icon: Briefcase,
+                title: "Mercer & Stellaria Law Office",
+                desc: "Conseil, contentieux stratégique, gouvernance et médiation.",
+                to: "/cabinet",
+              },
+              {
+                icon: ShieldCheck,
+                title: "Mercer & Stellaria Insurance",
+                desc: "Offres santé, pro et patrimoniales avec parcours assurantiels digitalisés.",
+                to: "/assurances",
+              },
+              {
+                icon: Wallet,
+                title: "Mercer & Stellaria Investment",
+                desc: "Gestion de patrimoine, private equity et allocation d actifs.",
+                to: "/investment",
+              },
+            ].map((s) => (
+              <Link key={s.title} to={s.to as any} className="group">
                 <Card className="hover-lift h-full border-border">
                   <CardContent className="p-7">
                     <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-lg border border-gold/25 bg-gold/10 text-gold transition-all duration-300 group-hover:scale-105 group-hover:bg-gold group-hover:text-[#0a0e16]">
@@ -155,6 +186,75 @@ function Home() {
                 </Card>
               </Link>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-secondary py-20">
+        <div className="container-page">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Assurance - accès rapide client</div>
+              <h2 className="mt-2 font-display text-3xl font-bold text-foreground gold-underline">Déjà client Mercer & Stellaria Insurance ?</h2>
+              <p className="mt-3 max-w-3xl text-sm text-muted-foreground md:text-base">
+                Retrouvez vos services prioritaires en accès direct pour gagner du temps sur les actions les plus fréquentes.
+              </p>
+            </div>
+          </div>
+          <div className="stagger-children mt-10 grid gap-6 md:grid-cols-3">
+            {QUICK_INSURANCE_ACTIONS.map((action) => (
+              <Link key={action.title} to={action.to as any} className="group">
+                <Card className="hover-lift h-full border-border shadow-[var(--shadow-card)]">
+                  <CardContent className="p-6">
+                    <div className="mb-4 inline-flex items-center gap-2 text-xs uppercase tracking-widest text-gold">
+                      <ShieldCheck className="h-4 w-4" /> Action
+                    </div>
+                    <h3 className="font-display text-lg font-bold text-foreground">{action.title}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">{action.desc}</p>
+                    <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-navy transition-colors group-hover:text-gold">
+                      Ouvrir <ArrowRight className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20">
+        <div className="container-page">
+          <div className="max-w-2xl">
+            <div className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Valeurs et engagements</div>
+            <h2 className="mt-2 font-display text-3xl font-bold text-foreground md:text-4xl gold-underline">
+              L excellence d un groupe, la synergie de trois expertises
+            </h2>
+            <p className="mt-4 text-sm text-muted-foreground md:text-base">
+              Mercer & Stellaria rassemble sous un même toit le conseil juridique, la protection assurantielle et l ingénierie financière.
+            </p>
+          </div>
+          <div className="stagger-children mt-10 grid gap-6 md:grid-cols-3">
+            <ValueCard
+              icon={Gavel}
+              overline="Accompagnement global"
+              title="Sécurité juridique et assurantielle"
+              text="Nos avocats et experts assurance sécurisent structures, contrats et actifs stratégiques."
+              to="/cabinet"
+            />
+            <ValueCard
+              icon={Wallet}
+              overline="Gestion de patrimoine"
+              title="Private Equity et allocation d actifs"
+              text="Des solutions sur-mesure de valorisation patrimoniale et d investissement pour vos objectifs long terme."
+              to="/investment"
+            />
+            <ValueCard
+              icon={Users}
+              overline="Sécurité et proximité"
+              title="Espaces clients sécurisés"
+              text="Suivez vos dossiers, contrats et portefeuilles en temps réel depuis vos espaces dédiés 24/7."
+              to="/connexion"
+            />
           </div>
         </div>
       </section>
@@ -197,14 +297,38 @@ function Home() {
       </section>
 
       <section className="gov-gradient text-white">
-        <div className="container-page flex flex-col items-start gap-6 py-16 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="font-display text-2xl font-bold md:text-3xl">Vous êtes collaborateur du groupe ?</h2>
-            <p className="mt-2 text-white/75">Accédez à votre espace : dossiers, documents, signatures, facturation et formations.</p>
+        <div className="container-page py-16">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card className="border-white/20 bg-white/5 text-white">
+              <CardContent className="p-6">
+                <div className="mb-2 inline-flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
+                  <Users className="h-4 w-4" /> Espace client
+                </div>
+                <h3 className="font-display text-2xl font-bold">Connexion aux espaces clients</h3>
+                <p className="mt-2 text-white/75">Contrats, paiements, signatures, messagerie, documents.</p>
+                <Button asChild size="sm" className="mt-5 bg-gold text-[#0a0e16] hover:bg-gold-soft">
+                  <Link to="/connexion">Accéder à mon espace</Link>
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-white/20 bg-white/5 text-white">
+              <CardContent className="p-6">
+                <div className="mb-2 inline-flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
+                  <Briefcase className="h-4 w-4" /> Espace collaborateur
+                </div>
+                <h3 className="font-display text-2xl font-bold">Portail collaborateur</h3>
+                <p className="mt-2 text-white/75">Pilotage des dossiers, clients, facturation et conformité opérationnelle.</p>
+                <Button asChild size="sm" className="mt-5 bg-gold text-[#0a0e16] hover:bg-gold-soft">
+                  <Link to="/espace-avocat">Accéder au portail</Link>
+                </Button>
+              </CardContent>
+            </Card>
           </div>
-          <Button asChild size="lg" className="press bg-gold text-[#0a0e16] shadow-[var(--shadow-gold)] hover:bg-gold-soft">
-            <Link to="/espace-avocat">Accéder à mon espace</Link>
-          </Button>
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            <LegalPillar icon={Lock} title="Sécurité / SSL" text="Flux chiffrés, contrôle des accès et surveillance active des espaces sensibles." />
+            <LegalPillar icon={BadgeCheck} title="Conformité réglementaire" text="Référentiels de conformité, gouvernance et contrôle interne sur les activités du groupe." />
+            <LegalPillar icon={FileCheck2} title="Cadre juridique" text="Mentions légales, politique de confidentialité et CGU accessibles en permanence." />
+          </div>
         </div>
       </section>
     </>
@@ -216,6 +340,47 @@ function Block({ title, text }: { title: string; text: string }) {
     <div className="border-l-2 border-gold pl-5">
       <div className="font-display text-lg font-bold text-foreground">{title}</div>
       <p className="mt-1 text-sm md:text-base">{text}</p>
+    </div>
+  );
+}
+
+function ValueCard({
+  icon: Icon,
+  overline,
+  title,
+  text,
+  to,
+}: {
+  icon: any;
+  overline: string;
+  title: string;
+  text: string;
+  to: string;
+}) {
+  return (
+    <Card className="hover-lift h-full border-border">
+      <CardContent className="p-6">
+        <div className="mb-3 inline-flex items-center gap-2 text-xs uppercase tracking-widest text-gold">
+          <Icon className="h-4 w-4" /> {overline}
+        </div>
+        <h3 className="font-display text-xl font-bold text-foreground">{title}</h3>
+        <p className="mt-2 text-sm text-muted-foreground">{text}</p>
+        <Link to={to as any} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-navy hover:text-gold">
+          En savoir plus <ArrowRight className="h-4 w-4" />
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LegalPillar({ icon: Icon, title, text }: { icon: any; title: string; text: string }) {
+  return (
+    <div className="rounded-lg border border-white/15 bg-white/5 p-5">
+      <div className="mb-2 inline-flex items-center gap-2 text-gold-soft">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="font-display text-base font-bold">{title}</div>
+      <p className="mt-1 text-sm text-white/75">{text}</p>
     </div>
   );
 }

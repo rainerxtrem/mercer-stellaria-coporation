@@ -17,14 +17,9 @@ import {
 
 const NAV = [
   { to: "/", label: "Accueil" },
-  { to: "/le-barreau", label: "Le groupe" },
-  { to: "/avocats", label: "Conseils" },
-  { to: "/cabinets", label: "Entités" },
-  { to: "/services", label: "Services" },
-  { to: "/formations", label: "Formations" },
-  { to: "/actualites", label: "Actualités" },
-  { to: "/discipline", label: "Discipline" },
-  { to: "/contact", label: "Contact" },
+  { to: "/cabinet", label: "Avocats" },
+  { to: "/assurances", label: "Assurances" },
+  { to: "/investment", label: "Investissement" },
 ] as const;
 
 export function Header() {
@@ -40,7 +35,7 @@ export function Header() {
           <img src={logo} alt={BRAND.name} width={44} height={44} className="h-11 w-11 shrink-0 object-contain transition-transform duration-500 group-hover:scale-105" />
           <div className="min-w-0 leading-tight">
             <div className="font-display text-base font-bold tracking-tight text-foreground sm:text-lg">{BRAND.shortName}</div>
-            <div className="truncate text-[10px] uppercase tracking-[0.22em] text-gold">Corporation</div>
+            <div className="truncate text-[10px] uppercase tracking-[0.22em] text-gold">HOLDING | LAW OFFICE | INSURANCE | INVESTMENT</div>
           </div>
         </Link>
         <nav className="hidden xl:flex items-center gap-1">
@@ -59,7 +54,7 @@ export function Header() {
         <div className="hidden md:flex items-center gap-2">
           {session && <GlobalSearch />}
           <Button asChild variant="outline" size="sm" className="press border-gold/50 text-gold transition-colors hover:bg-gold hover:text-[#0a0e16]">
-            <Link to="/verification"><ShieldCheck className="mr-1.5 h-4 w-4" />Vérifier une licence</Link>
+            <Link to="/connexion"><ShieldCheck className="mr-1.5 h-4 w-4" />Connexion Espaces Clients</Link>
           </Button>
           {session && <NotificationsBell />}
           {session ? (
@@ -98,9 +93,14 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild size="sm" className="press bg-navy text-white hover:bg-navy-soft">
-              <Link to="/auth"><LogIn className="mr-1.5 h-4 w-4" />Connexion</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" className="press bg-navy text-white hover:bg-navy-soft">
+                <Link to="/auth"><LogIn className="mr-1.5 h-4 w-4" />Connexion</Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="text-foreground/85 hover:text-foreground">
+                <Link to="/inscription">Créer un compte</Link>
+              </Button>
+            </div>
           )}
         </div>
         <button className="xl:hidden" onClick={() => setOpen((v) => !v)} aria-label="Menu">
@@ -122,7 +122,7 @@ export function Header() {
             ))}
             <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
               <Button asChild variant="outline" className="border-gold/50 text-gold">
-                <Link to="/verification" onClick={() => setOpen(false)}>Vérifier une licence</Link>
+                <Link to="/connexion" onClick={() => setOpen(false)}>Connexion Espaces Clients</Link>
               </Button>
               {session ? (
                 <>
@@ -136,9 +136,14 @@ export function Header() {
                   </Button>
                 </>
               ) : (
-                <Button asChild className="bg-navy text-white">
-                  <Link to="/auth" onClick={() => setOpen(false)}>Connexion</Link>
-                </Button>
+                <>
+                  <Button asChild className="bg-navy text-white">
+                    <Link to="/auth" onClick={() => setOpen(false)}>Connexion</Link>
+                  </Button>
+                  <Button asChild variant="ghost">
+                    <Link to="/inscription" onClick={() => setOpen(false)}>Créer un compte</Link>
+                  </Button>
+                </>
               )}
             </div>
           </div>
