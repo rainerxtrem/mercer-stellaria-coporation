@@ -16,6 +16,7 @@ const payloadSchema = z.object({
   last_name: z.string().trim().min(1).max(120),
   birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   unique_id: z.string().trim().min(1).max(64),
+  phone: z.string().trim().max(30).optional(),
 });
 
 function normalizeName(value: string): string {
@@ -205,6 +206,7 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
         const normalizedUniqueId = normalizeUniqueId(data.unique_id);
         const normalizedFirstName = normalizeName(data.first_name);
         const normalizedLastName = normalizeName(data.last_name);
+        const normalizedPhone = data.phone?.trim() ?? "";
 
         if (!/^[A-Z0-9_-]+$/.test(normalizedUniqueId)) {
           return new Response(
@@ -346,9 +348,16 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
                     SET discord_user_id = $2,
                         discord_username = $3,
                         portal_unique_id = $4,
+                        phone = COALESCE(NULLIF(phone, ''), NULLIF($5, '')),
                         updated_at = now()
                   WHERE id = $1`,
-                [activeClientId, context.discordUserId, context.discordUsername, normalizedUniqueId],
+                [
+                  activeClientId,
+                  context.discordUserId,
+                  context.discordUsername,
+                  normalizedUniqueId,
+                  normalizedPhone,
+                ],
               );
             });
           } else {
@@ -384,12 +393,13 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
                     first_name,
                     last_name,
                     birth_date,
+                    phone,
                     email,
                     discord_user_id,
                     discord_username,
                     portal_unique_id
                   )
-                 VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10)
+                 VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11)
                  RETURNING id`,
                 [
                   profileId,
@@ -398,6 +408,7 @@ export const Route = createFileRoute("/api/auth/discord/onboarding")({
                   data.first_name,
                   data.last_name,
                   data.birth_date,
+                  normalizedPhone || null,
                   context.discordEmail,
                   context.discordUserId,
                   context.discordUsername,

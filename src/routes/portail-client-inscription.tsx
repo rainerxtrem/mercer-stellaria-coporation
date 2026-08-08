@@ -18,6 +18,7 @@ function ClientPortalOnboardingPage() {
   const [lastName, setLastName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [uniqueId, setUniqueId] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -35,6 +36,7 @@ function ClientPortalOnboardingPage() {
           last_name: lastName,
           birth_date: birthDate,
           unique_id: uniqueId,
+          phone,
         }),
       });
 
@@ -109,6 +111,17 @@ function ClientPortalOnboardingPage() {
                   value={uniqueId}
                   onChange={(e) => setUniqueId(e.target.value)}
                   placeholder="Choisissez votre ID unique"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="phone">N° de téléphone</Label>
+                <Input
+                  id="phone"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Ex: +33 6 12 34 56 78"
                 />
               </div>
 
