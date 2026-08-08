@@ -11,7 +11,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
-RUN npm run build
+RUN NODE_ENV=production npm run build
 
 # Keep only what the server needs at runtime.
 RUN npm prune --omit=dev
