@@ -29,7 +29,7 @@ export const Route = createFileRoute("/api/auth/discord/start")({
         // This avoids redirect_uri mismatches on alternate Railway domains.
         const cfg = getDiscordConfig();
         const configuredCallback = new URL(cfg.redirectUri);
-        if (url.origin !== configuredCallback.origin) {
+        if (url.host !== configuredCallback.host) {
           const canonicalStart = new URL("/api/auth/discord/start", configuredCallback.origin);
           canonicalStart.searchParams.set("redirect_to", redirectTo);
           return new Response(null, {
