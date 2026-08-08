@@ -106,7 +106,7 @@ function ClientPortalMatterPage() {
           <p>{details?.matter?.description ?? "Aucune description."}</p>
           <p className="text-xs text-zinc-500">Referent: {details?.matter?.owner_name ?? "-"}</p>
           <Button asChild variant="outline" className="border-zinc-700 bg-transparent text-zinc-100">
-            <Link to="/portail-client/messages" search={{ matter: matterId }}>
+            <Link to="/portail-client/messages" search={{ matter: matterId, conversation: "" }}>
               Ouvrir la conversation de ce dossier
             </Link>
           </Button>

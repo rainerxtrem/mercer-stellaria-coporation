@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useSession, signOut } from "@/lib/auth";
+import { signOut } from "@/lib/auth";
 import { getClientProfile } from "@/lib/client-portal.functions";
 
 type PortalNavItem = {
@@ -19,13 +19,12 @@ const NAV_ITEMS: PortalNavItem[] = [
   { to: "/portail-client", label: "Dashboard", icon: LayoutDashboard },
   { to: "/portail-client/dossiers", label: "Mes dossiers", icon: Scale },
   { to: "/portail-client/documents", label: "Documents", icon: Files },
-  { to: "/portail-client/signatures", label: "A signer", icon: FileCheck2 },
+  { to: "/portail-client/signatures", label: "Factures & signatures", icon: FileCheck2 },
   { to: "/portail-client/messages", label: "Messages", icon: MessageSquare },
   { to: "/portail-client/notifications", label: "Notifications", icon: Bell },
 ];
 
 export function ClientPortalShell({ children }: { children: ReactNode }) {
-  const session = useSession();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const profileFn = useServerFn(getClientProfile);
@@ -74,7 +73,6 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
           <div className="space-y-3 px-4 py-4 text-xs text-zinc-400">
             <p className="truncate text-zinc-200">{displayName}</p>
             {profileQ.data?.firm_name ? <p className="truncate text-zinc-500">{profileQ.data.firm_name}</p> : null}
-            <p className="truncate text-zinc-500">{session?.user.email ?? ""}</p>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="border-zinc-700 bg-transparent text-zinc-200" asChild>
                 <Link to="/">Site public</Link>

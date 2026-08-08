@@ -413,7 +413,12 @@ export const listClientConversations = createServerFn({ method: "GET" })
       },
       conversations: conversations.map((conversation) => ({
         ...conversation,
-        latest_message: latestByConversation.get(conversation.id) ?? null,
+        latest_message: latestByConversation.has(conversation.id)
+          ? {
+              ...latestByConversation.get(conversation.id),
+              mine: latestByConversation.get(conversation.id).author_id === context.userId,
+            }
+          : null,
       })),
     };
   });

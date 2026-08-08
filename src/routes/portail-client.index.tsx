@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, FileCheck2, Files, MessageSquare, Scale } from "lucide-react";
+import { Bell, Building2, ChevronRight, FileCheck2, Files, MessageSquare, ReceiptText, Scale } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getClientDashboard } from "@/lib/client-portal.functions";
+import { getClientDashboard, listClientConversations } from "@/lib/client-portal.functions";
 
 export const Route = createFileRoute("/portail-client/")({
   head: () => ({
@@ -18,9 +18,14 @@ const numberFmt = new Intl.NumberFormat("fr-FR");
 
 function ClientPortalDashboard() {
   const dashboardFn = useServerFn(getClientDashboard);
+  const conversationsFn = useServerFn(listClientConversations);
   const dashboardQ = useQuery({
     queryKey: ["client-portal", "dashboard"],
     queryFn: () => dashboardFn(),
+  });
+  const conversationsQ = useQuery({
+    queryKey: ["client-portal", "conversations"],
+    queryFn: () => conversationsFn(),
   });
 
   const d: any = dashboardQ.data;
@@ -31,11 +36,50 @@ function ClientPortalDashboard() {
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">Portail client</p>
           <h1 className="font-display text-2xl font-semibold text-zinc-50">
-            {d ? `Bienvenue ${d.client.first_name ?? ""}` : "Chargement"}
+            {d
+              ? `Bienvenue ${[d.client.last_name, d.client.first_name].filter(Boolean).join(" ")}`
+              : "Chargement"}
           </h1>
-          <p className="mt-1 text-sm text-zinc-400">Espace isole pour le suivi de vos dossiers et documents.</p>
+          <p className="mt-1 text-sm text-zinc-400">Vos entreprises, dossiers et échanges réunis au même endroit.</p>
         </div>
         {d?.client?.company && <Badge className="border-zinc-700 bg-zinc-800 text-zinc-200">{d.client.company}</Badge>}
+      </div>
+
+      <div className="mb-6">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Mes entreprises</p>
+            <h2 className="mt-1 font-display text-lg font-semibold text-zinc-100">Contacts et services</h2>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {(conversationsQ.data?.conversations ?? []).map((conversation: any) => (
+            <div key={conversation.id} className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/65 transition hover:border-amber-500/30 hover:shadow-lg">
+              <Link
+                to="/portail-client/messages"
+                search={{ conversation: conversation.id, matter: "" }}
+                className="flex items-center gap-3 border-b border-zinc-800 p-4 hover:bg-zinc-800/40"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-300">
+                  <Building2 className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-zinc-100">{conversation.firm_name}</span>
+                  <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                    {conversation.latest_message?.body || conversation.latest_message?.attachment_name || "Ouvrir la conversation"}
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 text-zinc-600" />
+              </Link>
+              <div className="grid grid-cols-4 divide-x divide-zinc-800">
+                <CompanyAction to="/portail-client/dossiers" icon={Scale} label="Dossiers" />
+                <CompanyAction to="/portail-client/documents" icon={Files} label="Documents" />
+                <CompanyAction to="/portail-client/signatures" icon={ReceiptText} label="Factures" />
+                <CompanyAction to="/portail-client/signatures" icon={FileCheck2} label="Signatures" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -83,6 +127,15 @@ function ClientPortalDashboard() {
         </Card>
       </div>
     </section>
+  );
+}
+
+function CompanyAction({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
+  return (
+    <Link to={to} className="flex min-w-0 flex-col items-center gap-1 px-1 py-3 text-[10px] text-zinc-500 transition hover:bg-zinc-800/50 hover:text-amber-300">
+      <Icon className="h-4 w-4" />
+      <span className="max-w-full truncate">{label}</span>
+    </Link>
   );
 }
 

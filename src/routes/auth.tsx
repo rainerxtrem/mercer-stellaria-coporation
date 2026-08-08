@@ -30,7 +30,7 @@ function getAuthErrorMessage(message: string) {
     return "Identifiants invalides. Vérifiez votre adresse e-mail et votre mot de passe, ou utilisez le lien de réinitialisation.";
   }
   if (message === "discord_oauth_required") {
-    return "Les comptes clients se connectent uniquement via Discord dans le portail client isole.";
+    return "Les comptes clients se connectent avec Discord depuis l'espace Mercer & Stellaria.";
   }
   return message;
 }
