@@ -15,7 +15,7 @@ const payloadSchema = z.object({
   first_name: z.string().trim().min(1).max(120),
   last_name: z.string().trim().min(1).max(120),
   birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  unique_id: z.string().trim().min(3).max(64),
+  unique_id: z.string().trim().min(1).max(64),
 });
 
 function normalizeName(value: string): string {
