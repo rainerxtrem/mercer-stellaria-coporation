@@ -24,13 +24,28 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+function normalizeRedirectUri(raw: string): string {
+  const trimmed = raw.trim();
+  try {
+    const url = new URL(trimmed);
+    const isLocalhost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (url.protocol === "http:" && !isLocalhost) {
+      url.protocol = "https:";
+      return url.toString();
+    }
+  } catch {
+    // keep original value so Discord can return a clear error if malformed.
+  }
+  return trimmed;
+}
+
 export function getDiscordConfig() {
   const clientId = requiredEnv("DISCORD_CLIENT_ID");
   const clientSecret = requiredEnv("DISCORD_CLIENT_SECRET");
   const guildId = process.env.DISCORD_GUILD_ID?.trim() || null;
   const baseUrl = (process.env.APP_BASE_URL ?? process.env.PUBLIC_SITE_URL ?? "http://localhost:8080").replace(/\/$/, "");
   const defaultRedirect = `${baseUrl}/api/auth/discord/callback`;
-  const redirectUri = (process.env.DISCORD_REDIRECT_URI ?? defaultRedirect).trim();
+  const redirectUri = normalizeRedirectUri(process.env.DISCORD_REDIRECT_URI ?? defaultRedirect);
   const scopes = (process.env.DISCORD_OAUTH_SCOPES ?? "identify email guilds").trim();
 
   return { clientId, clientSecret, guildId, redirectUri, scopes };
