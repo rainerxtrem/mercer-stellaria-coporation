@@ -24,9 +24,19 @@ type DiscordGuildRole = {
 };
 
 type DiscordGuildMember = {
-  user?: { id?: string };
   roles?: string[];
 };
+
+const ALL_ACCESS_DISCORD_ROLES = new Set([
+  "chief executive officer",
+  "chief human resources officer",
+  "chief financial officer",
+  "administrative assistant",
+]);
+
+export function hasDiscordAllAccessRole(roleNames: string[]): boolean {
+  return roleNames.some((name) => ALL_ACCESS_DISCORD_ROLES.has(name.trim().toLowerCase()));
+}
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -115,9 +125,7 @@ async function discordBotGet<T>(path: string, botToken: string): Promise<T> {
     headers: { Authorization: `Bot ${botToken}` },
   });
   const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error((payload.message as string) ?? `Discord API error (${response.status})`);
-  }
+  if (!response.ok) throw new Error((payload.message as string) ?? `Discord API error (${response.status})`);
   return payload as unknown as T;
 }
 
@@ -139,25 +147,18 @@ export async function assertDiscordGuildMembership(accessToken: string): Promise
   }
 }
 
-export async function listDiscordGuildMemberRoleNames(discordUserId: string): Promise<string[]> {
+export async function listDiscordGuildMemberRoleNames(discordUserId: string): Promise<string[] | null> {
   const guildId = process.env.DISCORD_GUILD_ID?.trim() || "";
   const botToken = process.env.DISCORD_BOT_TOKEN?.trim() || "";
-  if (!guildId || !botToken) return [];
+  if (!guildId || !botToken) return null;
 
   const [roles, member] = await Promise.all([
     discordBotGet<DiscordGuildRole[]>(`/guilds/${guildId}/roles`, botToken),
     discordBotGet<DiscordGuildMember>(`/guilds/${guildId}/members/${discordUserId}`, botToken),
   ]);
-
-  const roleNameById = new Map<string, string>();
-  for (const role of roles ?? []) {
-    roleNameById.set(role.id, role.name);
-  }
-
-  const names: string[] = [];
-  for (const roleId of member.roles ?? []) {
-    const roleName = roleNameById.get(roleId);
-    if (roleName) names.push(roleName);
-  }
-  return names;
+  const namesById = new Map(roles.map((role) => [role.id, role.name]));
+  return (member.roles ?? []).flatMap((roleId) => {
+    const name = namesById.get(roleId);
+    return name ? [name] : [];
+  });
 }

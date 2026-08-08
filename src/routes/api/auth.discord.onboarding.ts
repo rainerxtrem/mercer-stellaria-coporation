@@ -146,26 +146,25 @@ async function ensureClientEnterpriseMemberships(
     );
 
     await client.query(
+      `INSERT INTO public.enterprise_member_grades (membership_id, grade_id)
+       SELECT membership.id, grade.id
+         FROM public.enterprise_memberships membership
+         JOIN public.enterprise_grades grade
+           ON grade.firm_id = membership.firm_id
+          AND grade.code = 'client'
+        WHERE membership.user_id = $1
+          AND membership.firm_id = ANY($2::uuid[])
+          AND membership.status = 'active'
+       ON CONFLICT DO NOTHING`,
+      [userId, uniqueFirmIds],
+    );
+
+    await client.query(
       `UPDATE public.profiles
           SET active_firm_id = $2,
               updated_at = now()
         WHERE id = $1`,
       [userId, defaultFirmId],
-    );
-
-    // Ensure each active membership has at least the "client" grade for module guards.
-    await client.query(
-      `INSERT INTO public.enterprise_member_grades (membership_id, grade_id)
-       SELECT m.id, g.id
-         FROM public.enterprise_memberships m
-         JOIN public.enterprise_grades g
-           ON g.firm_id = m.firm_id
-          AND g.code = 'client'
-        WHERE m.user_id = $1
-          AND m.firm_id = ANY($2::uuid[])
-          AND m.status = 'active'
-       ON CONFLICT (membership_id, grade_id) DO NOTHING`,
-      [userId, uniqueFirmIds],
     );
   });
 }

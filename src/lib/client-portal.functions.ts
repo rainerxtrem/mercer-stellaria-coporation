@@ -40,26 +40,24 @@ async function myClientRow(context: { supabase: any; userId: string }) {
 async function getOrCreateGeneralConversation(
   context: { supabase: any; userId: string },
   client: { id: string; firm_id: string | null },
+  firmId: string,
 ) {
   const { data: existing } = await context.supabase
     .from("client_conversations")
     .select("id, client_id, firm_id, matter_id, subject, status, client_last_read_at, staff_last_read_at, created_at, updated_at")
     .eq("client_id", client.id)
+    .eq("firm_id", firmId)
     .is("matter_id", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (existing) return existing;
 
-  if (!client.firm_id) {
-    throw new Error("Le client n'est rattache a aucune entreprise.");
-  }
-
   const { data: created, error } = await context.supabase
     .from("client_conversations")
     .insert({
       client_id: client.id,
-      firm_id: client.firm_id,
+      firm_id: firmId,
       created_by: context.userId,
       subject: "Contacter l'entreprise",
     })
@@ -67,6 +65,47 @@ async function getOrCreateGeneralConversation(
     .single();
   if (error) throw new Error(error.message);
   return created;
+}
+
+async function getClientConversation(
+  context: { supabase: any; userId: string },
+  clientId: string,
+  conversationId: string,
+) {
+  const { data, error } = await context.supabase
+    .from("client_conversations")
+    .select("id, client_id, firm_id, matter_id, subject, status, client_last_read_at, staff_last_read_at, created_at, updated_at")
+    .eq("id", conversationId)
+    .eq("client_id", clientId)
+    .is("matter_id", null)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Conversation inaccessible.");
+  return data;
+}
+
+async function listClientMessagingFirms(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const [{ data: memberships }, { data: modules }] = await Promise.all([
+    supabaseAdmin
+      .from("enterprise_memberships")
+      .select("firm_id, firms(id, name, logo_url)")
+      .eq("user_id", userId)
+      .eq("status", "active"),
+    supabaseAdmin
+      .from("enterprise_modules")
+      .select("firm_id")
+      .eq("module_slug", "messaging")
+      .eq("enabled", true),
+  ]);
+  const enabledFirmIds = new Set((modules ?? []).map((row: any) => row.firm_id));
+  return (memberships ?? [])
+    .map((row: any) => ({
+      id: row.firm_id as string,
+      name: String(row.firms?.name ?? "Entreprise"),
+      logo_url: (row.firms?.logo_url as string | null) ?? null,
+    }))
+    .filter((firm) => enabledFirmIds.has(firm.id));
 }
 
 // ============ PROFIL ============
@@ -332,14 +371,61 @@ export const getClientGeneralConversation = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const client = await myClientRow(context);
-    return getOrCreateGeneralConversation(context, client);
+    const firms = await listClientMessagingFirms(context.userId);
+    const firmId = firms[0]?.id ?? client.firm_id;
+    if (!firmId) throw new Error("Aucune entreprise autorisée.");
+    return getOrCreateGeneralConversation(context, client, firmId);
+  });
+
+export const listClientConversations = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const client = await myClientRow(context);
+    const firms = await listClientMessagingFirms(context.userId);
+    const conversations = await Promise.all(
+      firms.map(async (firm) => ({
+        ...(await getOrCreateGeneralConversation(context, client, firm.id)),
+        firm_name: firm.name,
+        firm_logo_url: firm.logo_url,
+      })),
+    );
+
+    const ids = conversations.map((conversation) => conversation.id);
+    const latestByConversation = new Map<string, any>();
+    if (ids.length > 0) {
+      const { data: messages, error } = await context.supabase
+        .from("client_conversation_messages")
+        .select("id, conversation_id, author_id, body, attachment_name, created_at")
+        .in("conversation_id", ids)
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      for (const message of messages ?? []) {
+        if (!latestByConversation.has((message as any).conversation_id)) {
+          latestByConversation.set((message as any).conversation_id, message);
+        }
+      }
+    }
+
+    return {
+      client: {
+        first_name: client.first_name,
+        last_name: client.last_name,
+      },
+      conversations: conversations.map((conversation) => ({
+        ...conversation,
+        latest_message: latestByConversation.get(conversation.id) ?? null,
+      })),
+    };
   });
 
 export const listClientGeneralMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((data: { conversation_id: string }) => ({
+    conversation_id: z.string().uuid().parse(data.conversation_id),
+  }))
+  .handler(async ({ data, context }) => {
     const client = await myClientRow(context);
-    const conversation = await getOrCreateGeneralConversation(context, client);
+    const conversation = await getClientConversation(context, client.id, data.conversation_id);
     const { data: rows, error } = await context.supabase
       .from("client_conversation_messages")
       .select("id, conversation_id, author_id, body, attachment_path, attachment_name, attachment_mime, attachment_size_bytes, created_at")
@@ -357,13 +443,15 @@ export const listClientGeneralMessages = createServerFn({ method: "GET" })
 export const sendClientGeneralMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: {
+    conversation_id: string;
     body: string;
     attachment_path?: string | null;
     attachment_name?: string | null;
     attachment_mime?: string | null;
     attachment_size_bytes?: number | null;
   }) => ({
-    body: z.string().trim().min(1, "Le message est vide").max(5000).parse(d.body),
+    conversation_id: z.string().uuid().parse(d.conversation_id),
+    body: z.string().trim().max(5000).parse(d.body),
     attachment_path: z.string().trim().max(600).nullable().optional().parse(d.attachment_path ?? null),
     attachment_name: z.string().trim().max(255).nullable().optional().parse(d.attachment_name ?? null),
     attachment_mime: z.string().trim().max(120).nullable().optional().parse(d.attachment_mime ?? null),
@@ -371,7 +459,8 @@ export const sendClientGeneralMessage = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data, context }) => {
     const client = await myClientRow(context);
-    const conversation = await getOrCreateGeneralConversation(context, client);
+    if (!data.body && !data.attachment_path) throw new Error("Le message est vide");
+    const conversation = await getClientConversation(context, client.id, data.conversation_id);
     const { data: created, error } = await context.supabase
       .from("client_conversation_messages")
       .insert({
@@ -392,12 +481,12 @@ export const sendClientGeneralMessage = createServerFn({ method: "POST" })
       .update({ staff_last_read_at: null })
       .eq("id", conversation.id);
 
-    if (client.firm_id) {
+    if (conversation.firm_id) {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: managers } = await supabaseAdmin
         .from("lawyers")
         .select("profile_id")
-        .eq("firm_id", client.firm_id)
+        .eq("firm_id", conversation.firm_id)
         .not("profile_id", "is", null);
       const { notifyUser } = await import("@/lib/notify.server");
       for (const manager of managers ?? []) {
@@ -417,15 +506,66 @@ export const sendClientGeneralMessage = createServerFn({ method: "POST" })
 
 export const markClientGeneralConversationRead = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((data: { conversation_id: string }) => ({
+    conversation_id: z.string().uuid().parse(data.conversation_id),
+  }))
+  .handler(async ({ data, context }) => {
     const client = await myClientRow(context);
-    const conversation = await getOrCreateGeneralConversation(context, client);
+    const conversation = await getClientConversation(context, client.id, data.conversation_id);
     const { error } = await context.supabase
       .from("client_conversations")
       .update({ client_last_read_at: new Date().toISOString() })
       .eq("id", conversation.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+export const createClientConversationUploadUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: {
+    conversation_id: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+  }) => ({
+    conversation_id: z.string().uuid().parse(data.conversation_id),
+    filename: z.string().trim().min(1).max(255).parse(data.filename),
+    mime_type: z.string().max(120).parse(data.mime_type),
+    size_bytes: z.number().int().nonnegative().parse(data.size_bytes),
+  }))
+  .handler(async ({ data, context }) => {
+    if (data.size_bytes > MAX_SIZE) throw new Error("Fichier trop volumineux (50 Mo maximum).");
+    if (!CLIENT_ALLOWED_MIME.has(data.mime_type)) throw new Error("Type de fichier non autorisé.");
+    const client = await myClientRow(context);
+    await getClientConversation(context, client.id, data.conversation_id);
+    const safeName = data.filename.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const path = `conversations/${data.conversation_id}/${crypto.randomUUID()}-${safeName}`;
+    const { data: signed, error } = await context.supabase.storage
+      .from("bar-media")
+      .createSignedUploadUrl(path);
+    if (error) throw new Error(error.message);
+    return { path, token: signed.token, signed_url: signed.signedUrl };
+  });
+
+export const getClientConversationAttachmentUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { message_id: string }) => ({
+    message_id: z.string().uuid().parse(data.message_id),
+  }))
+  .handler(async ({ data, context }) => {
+    await myClientRow(context);
+    const { data: message, error } = await context.supabase
+      .from("client_conversation_messages")
+      .select("attachment_path, attachment_name")
+      .eq("id", data.message_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!message?.attachment_path) throw new Error("Pièce jointe inaccessible.");
+    const { data: signed, error: signedError } = await context.supabase.storage
+      .from("bar-media")
+      .createSignedUrl(message.attachment_path, 300, { download: message.attachment_name ?? "document" });
+    if (signedError) throw new Error(signedError.message);
+    return { url: signed.signedUrl, filename: message.attachment_name ?? "document" };
   });
 
 export const sendClientMessage = createServerFn({ method: "POST" })

@@ -4,6 +4,7 @@ import {
   assertDiscordGuildMembership,
   exchangeDiscordCode,
   getDiscordUser,
+  hasDiscordAllAccessRole,
   listDiscordGuildMemberRoleNames,
 } from "@/backend/auth/discord";
 import {
@@ -21,128 +22,59 @@ const OAUTH_COOKIE = "sba_discord_oauth_callback";
 const LEGACY_STATE_COOKIE = "sba_discord_oauth_state";
 const LEGACY_REDIRECT_COOKIE = "sba_discord_oauth_redirect";
 const LEGACY_CALLBACK_COOKIE = "sba_discord_oauth_callback_uri";
-const DISCORD_ROLE_SYNC_MAP: Array<{ discordRoleName: string; siteRoles: string[] }> = [
-  {
-    discordRoleName: "Chief Executive Officer",
-    siteRoles: ["batonnier", "responsable_cabinet", "avocat", "assistant", "formateur", "examinateur"],
-  },
-  {
-    discordRoleName: "Chief Human Resources Officer",
-    siteRoles: ["batonnier", "responsable_cabinet", "avocat", "assistant", "formateur", "examinateur"],
-  },
-  {
-    discordRoleName: "Chief Financial Officer",
-    siteRoles: ["batonnier", "responsable_cabinet", "avocat", "assistant", "formateur", "examinateur"],
-  },
-  {
-    discordRoleName: "Administrative Assistant",
-    siteRoles: ["batonnier", "responsable_cabinet", "avocat", "assistant", "formateur", "examinateur"],
-  },
+const DISCORD_MANAGED_SITE_ROLES = [
+  "batonnier",
+  "responsable_cabinet",
+  "avocat",
+  "assistant",
+  "formateur",
+  "examinateur",
 ];
-
-const MANAGED_SITE_ROLES = new Set(
-  DISCORD_ROLE_SYNC_MAP.flatMap((entry) => entry.siteRoles),
-);
-
-const ROLE_TO_GRADE_CODE: Record<string, string> = {
-  responsable_cabinet: "manager",
-  avocat: "lawyer",
-  assistant: "assistant",
-  formateur: "trainer",
-  examinateur: "examiner",
-  client: "client",
-  batonnier: "manager",
-};
+const DISCORD_MANAGED_GRADE_CODES = ["manager", "lawyer", "assistant", "trainer", "examiner"];
 
 async function syncSiteRolesFromDiscord(userId: string, discordUserId: string): Promise<void> {
-  const discordRoleNames = await listDiscordGuildMemberRoleNames(discordUserId);
-  if (discordRoleNames.length === 0) return;
-
-  const normalizedDiscordRoles = new Set(discordRoleNames.map((name) => name.trim().toLowerCase()));
-  const desiredManagedRoles = new Set<string>();
-
-  for (const rule of DISCORD_ROLE_SYNC_MAP) {
-    if (normalizedDiscordRoles.has(rule.discordRoleName.toLowerCase())) {
-      for (const siteRole of rule.siteRoles) desiredManagedRoles.add(siteRole);
-    }
-  }
+  const roleNames = await listDiscordGuildMemberRoleNames(discordUserId);
+  if (roleNames === null) return;
+  const hasAllAccess = hasDiscordAllAccessRole(roleNames);
 
   await withSession({ role: "service", claims: null }, async (client) => {
-    const { rows: currentRoleRows } = await client.query<{ role: string }>(
-      `SELECT role::text AS role
-         FROM public.user_roles
-        WHERE user_id = $1`,
-      [userId],
-    );
-
-    const currentRoles = new Set(currentRoleRows.map((row) => row.role));
-
-    const toDelete = Array.from(MANAGED_SITE_ROLES).filter(
-      (role) => currentRoles.has(role) && !desiredManagedRoles.has(role),
-    );
-    if (toDelete.length > 0) {
-      await client.query(
-        `DELETE FROM public.user_roles
-          WHERE user_id = $1
-            AND role = ANY($2::public.app_role[])`,
-        [userId, toDelete],
-      );
-    }
-
-    const toInsert = Array.from(desiredManagedRoles).filter((role) => !currentRoles.has(role));
-    if (toInsert.length > 0) {
+    if (hasAllAccess) {
       await client.query(
         `INSERT INTO public.user_roles (user_id, role)
-         SELECT $1, r::public.app_role
-           FROM unnest($2::text[]) AS r
+         SELECT $1, role::public.app_role FROM unnest($2::text[]) AS role
          ON CONFLICT (user_id, role) DO NOTHING`,
-        [userId, toInsert],
+        [userId, DISCORD_MANAGED_SITE_ROLES],
       );
-    }
-
-    const managedGradeCodes = Array.from(
-      new Set(
-        Array.from(MANAGED_SITE_ROLES)
-          .map((role) => ROLE_TO_GRADE_CODE[role])
-          .filter(Boolean),
-      ),
-    );
-
-    const desiredGradeCodes = Array.from(
-      new Set(
-        Array.from(desiredManagedRoles)
-          .map((role) => ROLE_TO_GRADE_CODE[role])
-          .filter(Boolean),
-      ),
-    );
-
-    if (managedGradeCodes.length > 0) {
-      await client.query(
-        `DELETE FROM public.enterprise_member_grades mg
-          USING public.enterprise_memberships m, public.enterprise_grades g
-         WHERE mg.membership_id = m.id
-           AND mg.grade_id = g.id
-           AND m.user_id = $1
-           AND g.code = ANY($2::text[])
-           AND NOT (g.code = ANY($3::text[]))`,
-        [userId, managedGradeCodes, desiredGradeCodes],
-      );
-    }
-
-    if (desiredGradeCodes.length > 0) {
       await client.query(
         `INSERT INTO public.enterprise_member_grades (membership_id, grade_id)
-         SELECT m.id, g.id
-           FROM public.enterprise_memberships m
-           JOIN public.enterprise_grades g
-             ON g.firm_id = m.firm_id
-            AND g.code = ANY($2::text[])
-          WHERE m.user_id = $1
-            AND m.status = 'active'
+         SELECT membership.id, grade.id
+           FROM public.enterprise_memberships membership
+           JOIN public.enterprise_grades grade
+             ON grade.firm_id = membership.firm_id
+            AND grade.code = ANY($2::text[])
+          WHERE membership.user_id = $1
+            AND membership.status = 'active'
          ON CONFLICT (membership_id, grade_id) DO NOTHING`,
-        [userId, desiredGradeCodes],
+        [userId, DISCORD_MANAGED_GRADE_CODES],
       );
+      return;
     }
+
+    await client.query(
+      `DELETE FROM public.enterprise_member_grades member_grade
+       USING public.enterprise_memberships membership, public.enterprise_grades grade
+       WHERE member_grade.membership_id = membership.id
+         AND member_grade.grade_id = grade.id
+         AND membership.user_id = $1
+         AND grade.code = ANY($2::text[])`,
+      [userId, DISCORD_MANAGED_GRADE_CODES],
+    );
+    await client.query(
+      `DELETE FROM public.user_roles
+        WHERE user_id = $1
+          AND role::text = ANY($2::text[])`,
+      [userId, DISCORD_MANAGED_SITE_ROLES],
+    );
   });
 }
 
@@ -150,13 +82,10 @@ async function ensureClientEnterpriseGrades(userId: string): Promise<void> {
   await withSession({ role: "service", claims: null }, async (client) => {
     await client.query(
       `INSERT INTO public.enterprise_member_grades (membership_id, grade_id)
-       SELECT m.id, g.id
-         FROM public.enterprise_memberships m
-         JOIN public.enterprise_grades g
-           ON g.firm_id = m.firm_id
-          AND g.code = 'client'
-        WHERE m.user_id = $1
-          AND m.status = 'active'
+       SELECT membership.id, grade.id
+         FROM public.enterprise_memberships membership
+         JOIN public.enterprise_grades grade ON grade.firm_id = membership.firm_id AND grade.code = 'client'
+        WHERE membership.user_id = $1 AND membership.status = 'active'
        ON CONFLICT (membership_id, grade_id) DO NOTHING`,
       [userId],
     );

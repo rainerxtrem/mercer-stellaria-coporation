@@ -30,13 +30,10 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const profileFn = useServerFn(getClientProfile);
   const profileQ = useQuery({ queryKey: ["client-portal", "profile", "shell"], queryFn: () => profileFn() });
-  const fullName = [profileQ.data?.first_name, profileQ.data?.last_name].filter(Boolean).join(" ").trim();
-  const displayName = fullName || "Client";
-  const initials = displayName
-    .split(" ")
+  const displayName = [profileQ.data?.last_name, profileQ.data?.first_name].filter(Boolean).join(" ") || "Client";
+  const initials = [profileQ.data?.first_name, profileQ.data?.last_name]
     .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
+    .map((part) => part?.[0]?.toUpperCase())
     .join("");
 
   return (
@@ -49,9 +46,7 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
               <h1 className="mt-1 font-display text-lg font-semibold text-zinc-50">Portail Client</h1>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/25 font-semibold text-amber-100">
-                {initials || "CL"}
-              </span>
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/25 font-semibold">{initials || "CL"}</span>
               <span className="max-w-[140px] truncate">{displayName}</span>
             </div>
           </div>
@@ -77,7 +72,7 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
           </nav>
           <Separator className="bg-zinc-800/80" />
           <div className="space-y-3 px-4 py-4 text-xs text-zinc-400">
-            <p className="truncate">{displayName}</p>
+            <p className="truncate text-zinc-200">{displayName}</p>
             {profileQ.data?.firm_name ? <p className="truncate text-zinc-500">{profileQ.data.firm_name}</p> : null}
             <p className="truncate text-zinc-500">{session?.user.email ?? ""}</p>
             <div className="flex gap-2">
