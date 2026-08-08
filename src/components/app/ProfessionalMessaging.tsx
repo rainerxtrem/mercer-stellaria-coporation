@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/lib/auth";
 import { useEnterpriseWorkspace } from "@/hooks/use-enterprise-workspace";
-import { listMatterMessages, sendMatterMessage } from "@/lib/matter-messages.functions";
 import {
   listProfessionalGeneralMessages,
   listProfessionalMessagingThreads,
@@ -51,8 +50,10 @@ export function ProfessionalMessaging() {
     },
     refetchInterval: 4000,
   });
+
   const threads = useMemo<Thread[]>(() => {
-    return (threadsQ.data?.general ?? []).map((conversation: any) => {
+    const rows = Array.isArray(threadsQ.data?.general) ? threadsQ.data.general : [];
+    return rows.map((conversation: any) => {
       const clientName = [conversation.clients?.last_name, conversation.clients?.first_name]
         .filter(Boolean)
         .join(" ");
@@ -96,7 +97,10 @@ export function ProfessionalMessaging() {
     },
     refetchInterval: 2500,
   });
-  const messages = Array.isArray(generalQ.data) ? generalQ.data : [];
+
+  const messages = useMemo(() => {
+    return Array.isArray(generalQ.data) ? generalQ.data : [];
+  }, [generalQ.data]);
 
   useEffect(() => {
     if (!selectedGeneralId) return;

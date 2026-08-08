@@ -24,18 +24,19 @@ export function useEnterpriseWorkspace() {
   });
 
   const data = contextQ.data;
+  const enterprises = Array.isArray(data?.enterprises) ? data.enterprises : [];
 
   const activeFirmId = useMemo(() => {
     const preferred = readActiveFirmId();
-    if (preferred && (data?.enterprises ?? []).some((e: any) => e.firm_id === preferred)) {
+    if (preferred && enterprises.some((e: any) => e?.firm_id === preferred)) {
       return preferred;
     }
     return data?.active_firm_id ?? null;
-  }, [data?.active_firm_id, data?.enterprises]);
+  }, [data?.active_firm_id, enterprises]);
 
   const activeEnterprise = useMemo(
-    () => (data?.enterprises ?? []).find((enterprise: any) => enterprise.firm_id === activeFirmId) ?? null,
-    [data?.enterprises, activeFirmId],
+    () => enterprises.find((enterprise: any) => enterprise?.firm_id === activeFirmId) ?? null,
+    [enterprises, activeFirmId],
   );
 
   useEffect(() => {
@@ -44,8 +45,10 @@ export function useEnterpriseWorkspace() {
   }, [activeFirmId]);
 
   const navModules = useMemo(() => {
-    const allowed = new Set(activeEnterprise?.modules ?? []);
-    return (data?.nav_modules ?? [])
+    const allowedModules = Array.isArray(activeEnterprise?.modules) ? activeEnterprise.modules : [];
+    const sourceModules = Array.isArray(data?.nav_modules) ? data.nav_modules : [];
+    const allowed = new Set(allowedModules);
+    return sourceModules
       .filter((module: any) => allowed.has(module.slug))
       .sort((a: any, b: any) => Number(a.sort_order) - Number(b.sort_order));
   }, [data?.nav_modules, activeEnterprise?.modules]);
@@ -59,7 +62,7 @@ export function useEnterpriseWorkspace() {
     isLoading: contextQ.isLoading,
     isPendingSwitch: activeMutation.isPending,
     context: data,
-    enterprises: data?.enterprises ?? [],
+    enterprises,
     activeFirmId,
     activeEnterprise,
     navModules,
