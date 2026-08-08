@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { buildDiscordAuthorizeUrl } from "@/backend/auth/discord";
+import { buildDiscordAuthorizeUrl, getDiscordConfig } from "@/backend/auth/discord";
 
 const STATE_COOKIE = "sba_discord_oauth_state";
 const REDIRECT_COOKIE = "sba_discord_oauth_redirect";
@@ -24,14 +24,27 @@ export const Route = createFileRoute("/api/auth/discord/start")({
       GET: async ({ request }) => {
         const url = new URL(request.url);
         const redirectTo = sanitizeRedirect(url.searchParams.get("redirect_to"));
+
+        // Always start OAuth from the canonical origin configured for Discord.
+        // This avoids redirect_uri mismatches on alternate Railway domains.
+        const cfg = getDiscordConfig();
+        const configuredCallback = new URL(cfg.redirectUri);
+        if (url.origin !== configuredCallback.origin) {
+          const canonicalStart = new URL("/api/auth/discord/start", configuredCallback.origin);
+          canonicalStart.searchParams.set("redirect_to", redirectTo);
+          return new Response(null, {
+            status: 302,
+            headers: { Location: canonicalStart.toString() },
+          });
+        }
+
         const state = crypto.randomUUID();
-        const callbackUri = `${url.origin}/api/auth/discord/callback`;
-        const location = buildDiscordAuthorizeUrl(state, callbackUri);
+        const location = buildDiscordAuthorizeUrl(state);
 
         const headers = new Headers({ Location: location });
         headers.append("Set-Cookie", makeCookie(STATE_COOKIE, state, 600));
         headers.append("Set-Cookie", makeCookie(REDIRECT_COOKIE, redirectTo, 600));
-        headers.append("Set-Cookie", makeCookie(CALLBACK_COOKIE, callbackUri, 600));
+        headers.append("Set-Cookie", makeCookie(CALLBACK_COOKIE, cfg.redirectUri, 600));
 
         return new Response(null, {
           status: 302,
