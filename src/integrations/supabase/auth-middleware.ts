@@ -42,23 +42,28 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
     }
 
     const activeFirmHeader = request.headers.get("x-enterprise-id")?.trim() ?? "";
-    const activeFirmId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activeFirmHeader)
-      ? activeFirmHeader
-      : null;
+    const activeFirmId =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        activeFirmHeader,
+      )
+        ? activeFirmHeader
+        : null;
+
+    const requestClaims = {
+      ...(claims as unknown as Record<string, unknown>),
+      ...(activeFirmId ? { firm_id: activeFirmId } : {}),
+    };
 
     const supabase = createServerClient({
       role: "authenticated",
-      claims: {
-        ...(claims as unknown as Record<string, unknown>),
-        ...(activeFirmId ? { firm_id: activeFirmId } : {}),
-      },
+      claims: requestClaims,
     });
 
     return next({
       context: {
         supabase,
         userId: claims.sub,
-        claims,
+        claims: requestClaims,
       },
     });
   },

@@ -15,6 +15,7 @@ import seal from "@/assets/seal.png";
 import { useIsBatonnier } from "@/lib/auth";
 import { useEnterpriseWorkspace } from "@/hooks/use-enterprise-workspace";
 import { EnterpriseSwitcher } from "@/components/app/EnterpriseSwitcher";
+import { parseBooleanSearchParam } from "@/lib/boolean-search-param";
 
 type NavEntry = { to: string; label: string; icon: typeof Shield; exact?: boolean };
 
@@ -96,7 +97,7 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
 
   const isActive = (to: string, exact?: boolean) => {
     const routePath = to.split("?")[0];
-    const isMessagingView = locationSearch.messagerie === true || locationSearch.messagerie === "1";
+    const isMessagingView = parseBooleanSearchParam(locationSearch.messagerie);
     if (to.includes("messagerie=1")) return pathname === routePath && isMessagingView;
     const matchesPath = exact ? pathname === routePath : pathname === routePath || pathname.startsWith(routePath + "/");
     return matchesPath && !(routePath === "/dossiers" && isMessagingView);
@@ -132,7 +133,10 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
               {primaryNav.map((n) => (
                 <SidebarMenuItem key={n.to}>
                   <SidebarMenuButton asChild isActive={isActive(n.to, n.exact)} tooltip={n.label}>
-                    <Link to={n.to}>
+                    <Link
+                      to={n.to.split("?")[0]}
+                      search={n.to.includes("messagerie=1") ? { messagerie: true } : {}}
+                    >
                       <n.icon className="h-4 w-4" />
                       <span>{n.label}</span>
                     </Link>

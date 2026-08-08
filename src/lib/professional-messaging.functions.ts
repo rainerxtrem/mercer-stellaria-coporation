@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { withActorNames } from "@/lib/activity-log";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { withSession } from "@/backend/db/execute";
 
 type Context = { supabase: any; userId: string; claims?: Record<string, unknown> };
 
@@ -18,6 +19,27 @@ async function activeFirmId(context: Context) {
   if (error) throw new Error(error.message);
   if (!data?.active_firm_id) throw new Error("Aucune entreprise active sélectionnée.");
   return data.active_firm_id as string;
+}
+
+async function hasFirmModule(context: Context, firmId: string, moduleSlug: string) {
+  return withSession(
+    {
+      role: "authenticated",
+      claims: {
+        ...(context.claims ?? {}),
+        sub: context.userId,
+        role: "authenticated",
+        firm_id: firmId,
+      },
+    },
+    async (client) => {
+      const { rows } = await client.query<{ allowed: boolean }>(
+        "select app_private.user_has_module($1, $2, $3) as allowed",
+        [context.userId, firmId, moduleSlug],
+      );
+      return Boolean(rows[0]?.allowed);
+    },
+  );
 }
 
 async function firmConversation(context: Context, conversationId: string) {
@@ -39,10 +61,11 @@ export const listProfessionalMessagingThreads = createServerFn({ method: "GET" }
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const firmId = await activeFirmId(context as Context);
-    const [
-      { data: conversations, error: conversationsError },
-      { data: matters, error: mattersError },
-    ] = await Promise.all([
+    if (!(await hasFirmModule(context as Context, firmId, "messaging"))) {
+      throw new Error("Le module Messagerie n'est pas autorisé pour cette entreprise.");
+    }
+    const canReadMatters = await hasFirmModule(context as Context, firmId, "matters");
+    const [{ data: conversations, error: conversationsError }, mattersResult] = await Promise.all([
       context.supabase
         .from("client_conversations")
         .select(
@@ -50,17 +73,20 @@ export const listProfessionalMessagingThreads = createServerFn({ method: "GET" }
         )
         .eq("firm_id", firmId)
         .order("updated_at", { ascending: false }),
-      context.supabase
-        .from("matters")
-        .select(
-          "id, number, title, client_id, clients!matters_client_id_fkey(first_name,last_name)",
-        )
-        .eq("firm_id", firmId)
-        .neq("status", "archived")
-        .order("updated_at", { ascending: false }),
+      canReadMatters
+        ? context.supabase
+            .from("matters")
+            .select(
+              "id, number, title, client_id, clients!matters_client_id_fkey(first_name,last_name)",
+            )
+            .eq("firm_id", firmId)
+            .neq("status", "archived")
+            .order("updated_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
     ]);
     if (conversationsError) throw new Error(conversationsError.message);
-    if (mattersError) throw new Error(mattersError.message);
+    if (mattersResult.error) throw new Error(mattersResult.error.message);
+    const matters = mattersResult.data ?? [];
 
     const conversationIds = (conversations ?? []).map((row: any) => row.id);
     const matterIds = (matters ?? []).map((row: any) => row.id);

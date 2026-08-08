@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/lib/auth";
+import { useEnterpriseWorkspace } from "@/hooks/use-enterprise-workspace";
 import { listMatterMessages, sendMatterMessage } from "@/lib/matter-messages.functions";
 import {
   listProfessionalGeneralMessages,
@@ -27,6 +28,7 @@ type Thread = {
 
 export function ProfessionalMessaging() {
   const session = useSession();
+  const { activeFirmId, isLoading: enterpriseLoading } = useEnterpriseWorkspace();
   const queryClient = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
   const threadsFn = useServerFn(listProfessionalMessagingThreads);
@@ -37,7 +39,8 @@ export function ProfessionalMessaging() {
   const markReadFn = useServerFn(markProfessionalConversationRead);
 
   const threadsQ = useQuery({
-    queryKey: ["professional-messaging", "threads"],
+    queryKey: ["professional-messaging", activeFirmId, "threads"],
+    enabled: Boolean(activeFirmId) && !enterpriseLoading,
     queryFn: () => threadsFn(),
     refetchInterval: 4000,
   });
