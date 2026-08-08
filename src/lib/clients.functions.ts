@@ -35,6 +35,13 @@ const clientSchema = z.object({
   phone: z.string().trim().max(30).nullable().optional(),
   address: z.string().trim().max(300).nullable().optional(),
   birth_date: optionalDate,
+  portal_unique_id: z
+    .string()
+    .trim()
+    .max(64, { message: "L'ID unique est trop long (64 caractères max)." })
+    .regex(/^[A-Za-z0-9_-]*$/, { message: "L'ID unique ne peut contenir que lettres, chiffres, _ ou -." })
+    .nullable()
+    .optional(),
   notes: z.string().max(5000).nullable().optional(),
 });
 
@@ -53,6 +60,7 @@ function safeParse(raw: unknown) {
     phone: d.phone ? d.phone : null,
     address: d.address ? d.address : null,
     birth_date: d.birth_date ? d.birth_date : null,
+    portal_unique_id: d.portal_unique_id ? d.portal_unique_id.toUpperCase() : null,
     notes: d.notes ? d.notes : null,
   };
 }

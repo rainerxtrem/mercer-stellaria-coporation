@@ -12,15 +12,34 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { listClients, upsertClient, deleteClient } from "@/lib/clients.functions";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, UserPlus } from "lucide-react";
+import { Trash2, Pencil, UserPlus } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/clients")({
   head: () => ({ meta: [{ title: "Mes clients — Mercer & Stellaria Corporation" }] }),
   component: Page,
 });
 
-type ClientRow = { id?: string; first_name: string; last_name: string; email: string; phone: string; address: string; birth_date: string; notes: string };
-const empty: ClientRow = { first_name: "", last_name: "", email: "", phone: "", address: "", birth_date: "", notes: "" };
+type ClientRow = {
+  id?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  birth_date: string;
+  portal_unique_id: string;
+  notes: string;
+};
+const empty: ClientRow = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  address: "",
+  birth_date: "",
+  portal_unique_id: "",
+  notes: "",
+};
 
 function Page() {
   const [open, setOpen] = useState(false);
@@ -41,6 +60,7 @@ function Page() {
       phone: v.phone.trim() || null,
       address: v.address.trim() || null,
       birth_date: v.birth_date || null,
+      portal_unique_id: v.portal_unique_id.trim() || null,
       notes: v.notes.trim() || null,
     } as any }),
     onSuccess: () => {
@@ -67,6 +87,7 @@ function Page() {
       phone: c.phone ?? "",
       address: c.address ?? "",
       birth_date: c.birth_date ?? "",
+      portal_unique_id: c.portal_unique_id ?? "",
       notes: c.notes ?? "",
     });
     setOpen(true);
@@ -132,6 +153,7 @@ function Page() {
             <div><Label>Nom *</Label><Input value={editing.last_name} onChange={(e) => setEditing({ ...editing, last_name: e.target.value })} /></div>
             <div><Label>Email</Label><Input type="email" value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></div>
             <div><Label>Téléphone</Label><Input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></div>
+            <div><Label>ID unique</Label><Input value={editing.portal_unique_id} onChange={(e) => setEditing({ ...editing, portal_unique_id: e.target.value })} /></div>
             <div className="sm:col-span-2"><Label>Adresse</Label><Input value={editing.address} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></div>
             <div><Label>Date de naissance</Label><Input type="date" value={editing.birth_date} onChange={(e) => setEditing({ ...editing, birth_date: e.target.value })} /></div>
             <div className="sm:col-span-2"><Label>Notes</Label><Textarea rows={3} value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></div>
