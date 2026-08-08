@@ -8,6 +8,8 @@ import { canAuthenticate } from "./helpers";
 const createdUserIds: string[] = [];
 const createdFirmIds: string[] = [];
 const createdMatterIds: string[] = [];
+const createdClientIds: string[] = [];
+const createdInvoiceIds: string[] = [];
 
 type Seed = {
   userA: string;
@@ -162,6 +164,95 @@ describe("Multi-entreprise modulaire", () => {
 
     expect(list.error).toBeNull();
     expect((list.data ?? []).some((item: any) => item.id === row?.id)).toBe(false);
+  });
+
+  it.skipIf(!canAuthenticate)("isole strictement clients dossiers factures entre entreprise A et B", async () => {
+    const ctx = await seed();
+    const service = createServerClient(SERVICE_CONTEXT);
+
+    const modules = ["matters", "clients", "quotes", "billing"];
+    await service.from("enterprise_modules").upsert([
+      ...modules.map((slug) => ({ firm_id: ctx.firmA, module_slug: slug, enabled: true })),
+      ...modules.map((slug) => ({ firm_id: ctx.firmB, module_slug: slug, enabled: true })),
+    ] as never);
+
+    const { data: grades } = await service
+      .from("enterprise_grades")
+      .select("id, firm_id")
+      .in("firm_id", [ctx.firmA, ctx.firmB]);
+
+    const gradeModules = (grades ?? []).flatMap((g: any) =>
+      modules.map((slug) => ({ grade_id: g.id, module_slug: slug, allowed: true })),
+    );
+    if (gradeModules.length > 0) {
+      await service.from("enterprise_grade_modules").upsert(gradeModules as never);
+    }
+
+    const clientA = userClient(ctx.userA, ctx.firmA);
+    const createdClient = await clientA
+      .from("clients")
+      .insert({ owner_id: ctx.userA, first_name: "Alpha", last_name: "Client" } as never)
+      .select("id")
+      .single();
+    expect(createdClient.error).toBeNull();
+    if (createdClient.data?.id) createdClientIds.push(createdClient.data.id as string);
+
+    const createdMatter = await clientA
+      .from("matters")
+      .insert({
+        owner_id: ctx.userA,
+        client_id: createdClient.data!.id,
+        title: "Dossier Alpha",
+        status: "open",
+        number: "",
+      } as never)
+      .select("id")
+      .single();
+    expect(createdMatter.error).toBeNull();
+    if (createdMatter.data?.id) createdMatterIds.push(createdMatter.data.id as string);
+
+    const createdQuote = await clientA
+      .from("invoices")
+      .insert({
+        owner_id: ctx.userA,
+        kind: "quote",
+        client_id: createdClient.data!.id,
+        matter_id: createdMatter.data!.id,
+        status: "draft",
+      } as never)
+      .select("id")
+      .single();
+    expect(createdQuote.error).toBeNull();
+    if (createdQuote.data?.id) createdInvoiceIds.push(createdQuote.data.id as string);
+
+    const listAClients = await clientA.from("clients").select("id").eq("id", createdClient.data!.id);
+    const listAMatters = await clientA.from("matters").select("id").eq("id", createdMatter.data!.id);
+    const listAInvoices = await clientA.from("invoices").select("id").eq("id", createdQuote.data!.id);
+    expect((listAClients.data ?? []).length).toBe(1);
+    expect((listAMatters.data ?? []).length).toBe(1);
+    expect((listAInvoices.data ?? []).length).toBe(1);
+
+    const clientBContext = userClient(ctx.userA, ctx.firmB);
+    const listBClients = await clientBContext.from("clients").select("id").eq("id", createdClient.data!.id);
+    const listBMatters = await clientBContext.from("matters").select("id").eq("id", createdMatter.data!.id);
+    const listBInvoices = await clientBContext.from("invoices").select("id").eq("id", createdQuote.data!.id);
+    expect((listBClients.data ?? []).length).toBe(0);
+    expect((listBMatters.data ?? []).length).toBe(0);
+    expect((listBInvoices.data ?? []).length).toBe(0);
+
+    const updateDenied = await clientBContext
+      .from("matters")
+      .update({ title: "should-not-work" } as never)
+      .eq("id", createdMatter.data!.id);
+
+    expect(updateDenied.error).toBeNull();
+
+    const verifyUnchanged = await clientA
+      .from("matters")
+      .select("title")
+      .eq("id", createdMatter.data!.id)
+      .single();
+    expect(verifyUnchanged.data?.title).toBe("Dossier Alpha");
   });
 
   it.skipIf(!canAuthenticate)("valide le garde API table/rpc", async () => {
@@ -443,8 +534,14 @@ afterAll(async () => {
   if (!canAuthenticate) return;
 
   await withSession(SERVICE_CONTEXT, async (client) => {
+    if (createdInvoiceIds.length > 0) {
+      await client.query("delete from public.invoices where id = any($1::uuid[])", [createdInvoiceIds]);
+    }
     if (createdMatterIds.length > 0) {
       await client.query("delete from public.matters where id = any($1::uuid[])", [createdMatterIds]);
+    }
+    if (createdClientIds.length > 0) {
+      await client.query("delete from public.clients where id = any($1::uuid[])", [createdClientIds]);
     }
     if (createdUserIds.length > 0) {
       await client.query("delete from public.lawyers where profile_id = any($1::uuid[])", [createdUserIds]);

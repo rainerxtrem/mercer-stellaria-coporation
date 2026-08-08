@@ -6,6 +6,19 @@ import { z } from "zod";
 
 const DOC_LABEL = (kind: string) => (kind === "quote" ? "Devis" : "Facture");
 
+async function requireActiveFirmId(context: { supabase: any; userId: string; claims?: Record<string, unknown> }) {
+  const fromClaims = (context.claims?.firm_id as string | undefined) ?? null;
+  if (fromClaims) return fromClaims;
+  const { data: profile } = await context.supabase
+    .from("profiles")
+    .select("active_firm_id")
+    .eq("id", context.userId)
+    .maybeSingle();
+  const firmId = (profile?.active_firm_id as string | null) ?? null;
+  if (!firmId) throw new Error("Aucune entreprise active sélectionnée.");
+  return firmId;
+}
+
 
 // ============ SCHEMAS ============
 const itemSchema = z.object({
@@ -41,9 +54,11 @@ export const listInvoices = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { kind?: "quote" | "invoice"; status?: string; search?: string; client_id?: string; matter_id?: string } = {}) => d)
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     let q = context.supabase
       .from("invoices")
       .select("id, number, kind, status, issue_date, due_date, total, currency, client_snapshot, client_id, matter_id, converted_from_id, owner_id, updated_by")
+      .eq("firm_id", firmId)
       .order("issue_date", { ascending: false })
       .order("number", { ascending: false });
     if (data.kind) q = q.eq("kind", data.kind);
@@ -64,10 +79,12 @@ export const getInvoice = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => ({ id: z.string().uuid().parse(d.id) }))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { data: inv, error } = await context.supabase
       .from("invoices")
       .select("*, clients(id,first_name,last_name,email,phone,address), matters(id,number,title)")
       .eq("id", data.id)
+      .eq("firm_id", firmId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!inv) throw new Error("Introuvable");
@@ -91,6 +108,7 @@ export const createInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: z.infer<typeof createSchema>) => createSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { lines, subtotal, tax_amount, total } = computeTotals(data.items, data.tax_rate);
 
     // Snapshot client
@@ -116,6 +134,7 @@ export const createInvoice = createServerFn({ method: "POST" })
       .insert({
         kind: data.kind,
         owner_id: context.userId,
+        firm_id: firmId,
         client_id: data.client_id || null,
         matter_id: data.matter_id || null,
         currency: data.currency,
@@ -164,11 +183,13 @@ export const updateInvoice = createServerFn({ method: "POST" })
     return { id, ...createSchema.partial().parse(rest) };
   })
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { id, items, tax_rate, ...rest } = data;
     const { data: current } = await context.supabase
       .from("invoices")
       .select("status, tax_rate, client_id")
       .eq("id", id)
+      .eq("firm_id", firmId)
       .maybeSingle();
     if (!current) throw new Error("Introuvable");
     if (["paid", "cancelled", "converted"].includes(current.status)) {
@@ -219,7 +240,7 @@ export const updateInvoice = createServerFn({ method: "POST" })
       );
     }
 
-    const { error } = await context.supabase.from("invoices").update(patch as any).eq("id", id);
+    const { error } = await context.supabase.from("invoices").update(patch as any).eq("id", id).eq("firm_id", firmId);
     if (error) throw new Error(error.message);
     const { data: after } = await context.supabase
       .from("invoices").select("kind, number, matter_id").eq("id", id).maybeSingle();
@@ -243,10 +264,12 @@ export const setInvoiceStatus = createServerFn({ method: "POST" })
     status: z.enum(["draft","sent","accepted","refused","paid","partial","overdue","cancelled","converted"]).parse(d.status),
   }))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { error } = await context.supabase
       .from("invoices")
       .update({ status: data.status, ...(data.status === "paid" ? { paid_at: new Date().toISOString() } : {}) })
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .eq("firm_id", firmId);
     if (error) throw new Error(error.message);
     const { data: after } = await context.supabase
       .from("invoices").select("kind, number, matter_id").eq("id", data.id).maybeSingle();
@@ -267,10 +290,12 @@ export const convertQuoteToInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => ({ id: z.string().uuid().parse(d.id) }))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { data: q, error } = await context.supabase
       .from("invoices")
       .select("*")
       .eq("id", data.id)
+      .eq("firm_id", firmId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!q || q.kind !== "quote") throw new Error("Devis introuvable");
@@ -285,6 +310,7 @@ export const convertQuoteToInvoice = createServerFn({ method: "POST" })
       .insert({
         kind: "invoice",
         owner_id: q.owner_id,
+        firm_id: q.firm_id,
         client_id: q.client_id,
         matter_id: q.matter_id,
         currency: q.currency,
@@ -321,11 +347,12 @@ export const deleteInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => ({ id: z.string().uuid().parse(d.id) }))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { data: cur } = await context.supabase
-      .from("invoices").select("status, kind, number, matter_id").eq("id", data.id).maybeSingle();
+      .from("invoices").select("status, kind, number, matter_id").eq("id", data.id).eq("firm_id", firmId).maybeSingle();
     if (!cur) throw new Error("Introuvable");
     if (cur.status !== "draft") throw new Error("Seuls les brouillons peuvent être supprimés");
-    const { error } = await context.supabase.from("invoices").delete().eq("id", data.id);
+    const { error } = await context.supabase.from("invoices").delete().eq("id", data.id).eq("firm_id", firmId);
     if (error) throw new Error(error.message);
     await logMatterActivity(
       context.supabase, context.userId, cur.matter_id,
@@ -348,8 +375,9 @@ export const recordPayment = createServerFn({ method: "POST" })
     received_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().parse(d.received_on),
   }))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { data: inv } = await context.supabase
-      .from("invoices").select("total, paid_amount, kind, number, matter_id, currency").eq("id", data.invoice_id).maybeSingle();
+      .from("invoices").select("total, paid_amount, kind, number, matter_id, currency").eq("id", data.invoice_id).eq("firm_id", firmId).maybeSingle();
 
     if (!inv) throw new Error("Facture introuvable");
     if (inv.kind !== "invoice") throw new Error("Paiement uniquement pour les factures");

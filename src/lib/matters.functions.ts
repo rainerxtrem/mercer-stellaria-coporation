@@ -28,6 +28,19 @@ async function logActivity(
   await logMatterActivity(context.supabase, context.userId, matter_id, action, summary, entity);
 }
 
+async function requireActiveFirmId(context: { supabase: any; userId: string; claims?: Record<string, unknown> }) {
+  const fromClaims = (context.claims?.firm_id as string | undefined) ?? null;
+  if (fromClaims) return fromClaims;
+  const { data: profile } = await context.supabase
+    .from("profiles")
+    .select("active_firm_id")
+    .eq("id", context.userId)
+    .maybeSingle();
+  const firmId = (profile?.active_firm_id as string | null) ?? null;
+  if (!firmId) throw new Error("Aucune entreprise active sélectionnée.");
+  return firmId;
+}
+
 
 // ============ MATTERS ============
 const matterSchema = z.object({
@@ -47,9 +60,11 @@ export const listMatters = createServerFn({ method: "GET" })
     client_id: typeof d.client_id === "string" ? d.client_id : undefined,
   }))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     let q = context.supabase
       .from("matters")
       .select("*, clients!matters_client_id_fkey(id,first_name,last_name)")
+      .eq("firm_id", firmId)
       .order("opened_on", { ascending: false });
     if (data.status && data.status !== "all") q = q.eq("status", data.status);
     if (data.client_id && /^[0-9a-f-]{36}$/i.test(data.client_id)) q = q.eq("client_id", data.client_id);
@@ -72,10 +87,12 @@ export const getMatter = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => ({ id: z.string().uuid().parse(d.id) }))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { data: m, error } = await context.supabase
       .from("matters")
       .select("*, clients!matters_client_id_fkey(id,first_name,last_name,email,phone)")
       .eq("id", data.id)
+      .eq("firm_id", firmId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!m) throw new Error("Dossier introuvable");
@@ -91,9 +108,10 @@ export const createMatter = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: z.infer<typeof matterSchema>) => matterSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { data: created, error } = await context.supabase
       .from("matters")
-      .insert({ ...data, owner_id: context.userId, number: "" } as any)
+      .insert({ ...data, owner_id: context.userId, number: "", firm_id: firmId } as any)
       .select("id, number, title")
       .single();
     if (error) throw new Error(error.message);
@@ -117,13 +135,15 @@ export const updateMatter = createServerFn({ method: "POST" })
     return { id, ...matterSchema.partial().parse(rest) };
   })
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     const { id, ...updates } = data;
     const { data: before } = await context.supabase
       .from("matters")
       .select("title, status")
       .eq("id", id)
+      .eq("firm_id", firmId)
       .maybeSingle();
-    const { error } = await context.supabase.from("matters").update(updates).eq("id", id);
+    const { error } = await context.supabase.from("matters").update(updates).eq("id", id).eq("firm_id", firmId);
     if (error) throw new Error(error.message);
 
     const statusChanged =
@@ -165,6 +185,7 @@ export const deleteMatter = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => ({ id: z.string().uuid().parse(d.id) }))
   .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
     // Purge storage for this matter (cascade will clean db)
     const { data: docs } = await context.supabase
       .from("matter_documents")
@@ -173,7 +194,7 @@ export const deleteMatter = createServerFn({ method: "POST" })
     if (docs && docs.length > 0) {
       await context.supabase.storage.from("bar-media").remove(docs.map((d: any) => d.storage_path));
     }
-    const { error } = await context.supabase.from("matters").delete().eq("id", data.id);
+    const { error } = await context.supabase.from("matters").delete().eq("id", data.id).eq("firm_id", firmId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
