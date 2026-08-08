@@ -96,13 +96,7 @@ export function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button asChild variant="ghost" size="sm" className="text-foreground/85 hover:text-foreground">
-                <Link to="/inscription">Créer un compte</Link>
-              </Button>
-            </div>
-          )}
+          ) : null}
         </div>
         <button className="xl:hidden" onClick={() => setOpen((v) => !v)} aria-label="Menu">
           {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -138,13 +132,7 @@ export function Header() {
                     Se déconnecter
                   </Button>
                 </>
-              ) : (
-                <>
-                  <Button asChild variant="ghost">
-                    <Link to="/inscription" onClick={() => setOpen(false)}>Créer un compte</Link>
-                  </Button>
-                </>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

@@ -127,7 +127,7 @@ function AuthPage() {
               <p className="flex items-start gap-2">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
                 <span>
-                  En cas de problème avec l'inscription, utilisez le {" "}
+                  En cas de problème de connexion, utilisez le {" "}
                   <Link to="/contact" className="font-medium text-navy underline">formulaire de contact</Link>.
                 </span>
               </p>
