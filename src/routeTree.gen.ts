@@ -33,6 +33,7 @@ import { Route as LeBarreauRouteImport } from './routes/le-barreau'
 import { Route as MentionsLegalesRouteImport } from './routes/mentions-legales'
 import { Route as PolitiqueConfidentialiteRouteImport } from './routes/politique-confidentialite'
 import { Route as PortailClientRouteImport } from './routes/portail-client'
+import { Route as PortailClientInscriptionRouteImport } from './routes/portail-client-inscription'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SignalementRouteImport } from './routes/signalement'
@@ -96,6 +97,7 @@ import { Route as AuthenticatedAdminFormationsIndexRouteImport } from './routes/
 import { Route as AuthenticatedAdminFormationsIdRouteImport } from './routes/_authenticated/admin.formations.$id'
 import { Route as AuthenticatedExamensIdPassageRouteImport } from './routes/_authenticated/examens.$id.passage'
 import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth.discord.callback'
+import { Route as ApiAuthDiscordOnboardingRouteImport } from './routes/api/auth.discord.onboarding'
 import { Route as ApiAuthDiscordStartRouteImport } from './routes/api/auth.discord.start'
 import { Route as AuthenticatedExamensIdResultatAttemptIdRouteImport } from './routes/_authenticated/examens.$id.resultat.$attemptId'
 import { Route as AuthenticatedAdminExamensIdCopiesAttemptIdRouteImport } from './routes/_authenticated/admin.examens.$id.copies.$attemptId'
@@ -220,6 +222,12 @@ const PortailClientRoute = PortailClientRouteImport.update({
   path: '/portail-client',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortailClientInscriptionRoute =
+  PortailClientInscriptionRouteImport.update({
+    id: '/portail-client-inscription',
+    path: '/portail-client-inscription',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -572,6 +580,12 @@ const ApiAuthDiscordCallbackRoute = ApiAuthDiscordCallbackRouteImport.update({
   path: '/api/auth/discord/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthDiscordOnboardingRoute =
+  ApiAuthDiscordOnboardingRouteImport.update({
+    id: '/api/auth/discord/onboarding',
+    path: '/api/auth/discord/onboarding',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAuthDiscordStartRoute = ApiAuthDiscordStartRouteImport.update({
   id: '/api/auth/discord/start',
   path: '/api/auth/discord/start',
@@ -614,6 +628,7 @@ export interface FileRoutesByFullPath {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-confidentialite': typeof PolitiqueConfidentialiteRoute
   '/portail-client': typeof PortailClientRouteWithChildren
+  '/portail-client-inscription': typeof PortailClientInscriptionRoute
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
   '/signalement': typeof SignalementRoute
@@ -675,6 +690,7 @@ export interface FileRoutesByFullPath {
   '/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
+  '/api/auth/discord/onboarding': typeof ApiAuthDiscordOnboardingRoute
   '/api/auth/discord/start': typeof ApiAuthDiscordStartRoute
   '/admin/examens/': typeof AuthenticatedAdminExamensIndexRoute
   '/admin/formations/': typeof AuthenticatedAdminFormationsIndexRoute
@@ -704,6 +720,7 @@ export interface FileRoutesByTo {
   '/le-barreau': typeof LeBarreauRoute
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-confidentialite': typeof PolitiqueConfidentialiteRoute
+  '/portail-client-inscription': typeof PortailClientInscriptionRoute
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
   '/signalement': typeof SignalementRoute
@@ -763,6 +780,7 @@ export interface FileRoutesByTo {
   '/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
+  '/api/auth/discord/onboarding': typeof ApiAuthDiscordOnboardingRoute
   '/api/auth/discord/start': typeof ApiAuthDiscordStartRoute
   '/admin/examens': typeof AuthenticatedAdminExamensIndexRoute
   '/admin/formations': typeof AuthenticatedAdminFormationsIndexRoute
@@ -795,6 +813,7 @@ export interface FileRoutesById {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-confidentialite': typeof PolitiqueConfidentialiteRoute
   '/portail-client': typeof PortailClientRouteWithChildren
+  '/portail-client-inscription': typeof PortailClientInscriptionRoute
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
   '/signalement': typeof SignalementRoute
@@ -856,6 +875,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/formations/$id': typeof AuthenticatedAdminFormationsIdRoute
   '/_authenticated/examens/$id/passage': typeof AuthenticatedExamensIdPassageRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
+  '/api/auth/discord/onboarding': typeof ApiAuthDiscordOnboardingRoute
   '/api/auth/discord/start': typeof ApiAuthDiscordStartRoute
   '/_authenticated/admin/examens/': typeof AuthenticatedAdminExamensIndexRoute
   '/_authenticated/admin/formations/': typeof AuthenticatedAdminFormationsIndexRoute
@@ -888,6 +908,7 @@ export interface FileRouteTypes {
     | '/mentions-legales'
     | '/politique-confidentialite'
     | '/portail-client'
+    | '/portail-client-inscription'
     | '/reset-password'
     | '/services'
     | '/signalement'
@@ -949,6 +970,7 @@ export interface FileRouteTypes {
     | '/admin/formations/$id'
     | '/examens/$id/passage'
     | '/api/auth/discord/callback'
+    | '/api/auth/discord/onboarding'
     | '/api/auth/discord/start'
     | '/admin/examens/'
     | '/admin/formations/'
@@ -978,6 +1000,7 @@ export interface FileRouteTypes {
     | '/le-barreau'
     | '/mentions-legales'
     | '/politique-confidentialite'
+    | '/portail-client-inscription'
     | '/reset-password'
     | '/services'
     | '/signalement'
@@ -1037,6 +1060,7 @@ export interface FileRouteTypes {
     | '/admin/formations/$id'
     | '/examens/$id/passage'
     | '/api/auth/discord/callback'
+    | '/api/auth/discord/onboarding'
     | '/api/auth/discord/start'
     | '/admin/examens'
     | '/admin/formations'
@@ -1068,6 +1092,7 @@ export interface FileRouteTypes {
     | '/mentions-legales'
     | '/politique-confidentialite'
     | '/portail-client'
+    | '/portail-client-inscription'
     | '/reset-password'
     | '/services'
     | '/signalement'
@@ -1129,6 +1154,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/formations/$id'
     | '/_authenticated/examens/$id/passage'
     | '/api/auth/discord/callback'
+    | '/api/auth/discord/onboarding'
     | '/api/auth/discord/start'
     | '/_authenticated/admin/examens/'
     | '/_authenticated/admin/formations/'
@@ -1161,6 +1187,7 @@ export interface RootRouteChildren {
   MentionsLegalesRoute: typeof MentionsLegalesRoute
   PolitiqueConfidentialiteRoute: typeof PolitiqueConfidentialiteRoute
   PortailClientRoute: typeof PortailClientRouteWithChildren
+  PortailClientInscriptionRoute: typeof PortailClientInscriptionRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ServicesRoute: typeof ServicesRoute
   SignalementRoute: typeof SignalementRoute
@@ -1173,6 +1200,7 @@ export interface RootRouteChildren {
   ApiStorageOpRoute: typeof ApiStorageOpRoute
   ApiStorageUploadRoute: typeof ApiStorageUploadRoute
   ApiAuthDiscordCallbackRoute: typeof ApiAuthDiscordCallbackRoute
+  ApiAuthDiscordOnboardingRoute: typeof ApiAuthDiscordOnboardingRoute
   ApiAuthDiscordStartRoute: typeof ApiAuthDiscordStartRoute
 }
 
@@ -1344,6 +1372,13 @@ declare module '@tanstack/react-router' {
       path: '/portail-client'
       fullPath: '/portail-client'
       preLoaderRoute: typeof PortailClientRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portail-client-inscription': {
+      id: '/portail-client-inscription'
+      path: '/portail-client-inscription'
+      fullPath: '/portail-client-inscription'
+      preLoaderRoute: typeof PortailClientInscriptionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -1787,6 +1822,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthDiscordCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/discord/onboarding': {
+      id: '/api/auth/discord/onboarding'
+      path: '/api/auth/discord/onboarding'
+      fullPath: '/api/auth/discord/onboarding'
+      preLoaderRoute: typeof ApiAuthDiscordOnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/discord/start': {
       id: '/api/auth/discord/start'
       path: '/api/auth/discord/start'
@@ -2054,6 +2096,7 @@ const rootRouteChildren: RootRouteChildren = {
   MentionsLegalesRoute: MentionsLegalesRoute,
   PolitiqueConfidentialiteRoute: PolitiqueConfidentialiteRoute,
   PortailClientRoute: PortailClientRouteWithChildren,
+  PortailClientInscriptionRoute: PortailClientInscriptionRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ServicesRoute: ServicesRoute,
   SignalementRoute: SignalementRoute,
@@ -2066,6 +2109,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiStorageOpRoute: ApiStorageOpRoute,
   ApiStorageUploadRoute: ApiStorageUploadRoute,
   ApiAuthDiscordCallbackRoute: ApiAuthDiscordCallbackRoute,
+  ApiAuthDiscordOnboardingRoute: ApiAuthDiscordOnboardingRoute,
   ApiAuthDiscordStartRoute: ApiAuthDiscordStartRoute,
 }
 export const routeTree = rootRouteImport

@@ -5,6 +5,14 @@ import {
   exchangeDiscordCode,
   getDiscordUser,
 } from "@/backend/auth/discord";
+import {
+  DISCORD_ONBOARDING_COOKIE,
+  encodeOnboardingContext,
+  expireCookie,
+  readCookie,
+  sanitizeRedirect,
+  makeCookie,
+} from "@/backend/auth/discord-onboarding";
 import { issueSessionForUserId } from "@/backend/auth/service";
 import { withSession } from "@/backend/db/execute";
 
@@ -20,21 +28,6 @@ const PRIVILEGED_ROLES = new Set([
   "formateur",
   "examinateur",
 ]);
-
-function readCookie(request: Request, name: string): string | null {
-  const raw = request.headers.get("cookie") ?? "";
-  const chunks = raw.split(";");
-  for (const chunk of chunks) {
-    const [key, ...rest] = chunk.trim().split("=");
-    if (key === name) return decodeURIComponent(rest.join("="));
-  }
-  return null;
-}
-
-function expireCookie(name: string): string {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
-}
 
 function decodeOAuthContext(value: string | null): {
   state: string;
@@ -63,13 +56,6 @@ function decodeOAuthContext(value: string | null): {
   } catch {
     return null;
   }
-}
-
-function sanitizeRedirect(value: string | null): string {
-  if (!value) return "/portail-client";
-  if (!value.startsWith("/")) return "/portail-client";
-  if (value.startsWith("//")) return "/portail-client";
-  return value;
 }
 
 function htmlEscape(value: string): string {
@@ -155,10 +141,27 @@ export const Route = createFileRoute("/api/auth/discord/callback")({
             return rows[0] ?? null;
           });
 
-          if (!linked || !linked.profile_id || !linked.firm_id) {
+          if (!linked || !linked.firm_id) {
+            const onboarding = encodeOnboardingContext({
+              discordUserId: discordUser.id,
+              discordUsername: discordUser.global_name ?? discordUser.username,
+              discordEmail: discordUser.email ?? null,
+              redirectTo,
+            });
+
+            const redirectHeaders = new Headers({ Location: "/portail-client-inscription" });
+            redirectHeaders.append("Set-Cookie", expireCookie(OAUTH_COOKIE));
+            redirectHeaders.append("Set-Cookie", expireCookie(LEGACY_STATE_COOKIE));
+            redirectHeaders.append("Set-Cookie", expireCookie(LEGACY_REDIRECT_COOKIE));
+            redirectHeaders.append("Set-Cookie", expireCookie(LEGACY_CALLBACK_COOKIE));
+            redirectHeaders.append("Set-Cookie", makeCookie(DISCORD_ONBOARDING_COOKIE, onboarding, 900));
+            return new Response(null, { status: 302, headers: redirectHeaders });
+          }
+
+          if (!linked.profile_id) {
             return new Response(
               renderErrorPage(
-                "Ce compte Discord n'est pas lie a un client actif. Contactez votre entreprise.",
+                "Ce client existe mais n'a pas encore de compte. Terminez l'inscription client.",
               ).body,
               { status: 403, headers },
             );
