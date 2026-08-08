@@ -9,6 +9,7 @@ import {
   Shield, Building2, Newspaper, BookOpen, ScrollText, Settings,
   ChevronRight, GraduationCap, Home, Inbox, CheckSquare, Scale, DollarSign, FileStack,
   Receipt, FileCheck2, MessageSquare, CalendarDays,
+  Bell,
 } from "lucide-react";
 import seal from "@/assets/seal.png";
 import { useIsBatonnier } from "@/lib/auth";
@@ -16,6 +17,15 @@ import { useEnterpriseWorkspace } from "@/hooks/use-enterprise-workspace";
 import { EnterpriseSwitcher } from "@/components/app/EnterpriseSwitcher";
 
 type NavEntry = { to: string; label: string; icon: typeof Shield; exact?: boolean };
+
+const CLIENT_NAV: NavEntry[] = [
+  { to: "/portail-client", label: "Tableau de bord", icon: Gauge, exact: true },
+  { to: "/portail-client/messages", label: "Conversations", icon: MessageSquare },
+  { to: "/portail-client/dossiers", label: "Mes dossiers", icon: FolderOpen },
+  { to: "/portail-client/documents", label: "Documents", icon: FileText },
+  { to: "/portail-client/signatures", label: "Factures & signatures", icon: FileCheck2 },
+  { to: "/portail-client/notifications", label: "Notifications", icon: Bell },
+];
 
 const ADMIN_NAV: NavEntry[] = [
   { to: "/admin",              label: "Vue direction",   icon: Shield, exact: true },
@@ -52,20 +62,22 @@ const MODULE_ICONS: Record<string, typeof Shield> = {
   DollarSign,
 };
 
-export function AppSidebar() {
+export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff" | "client"; clientName?: string }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAdmin = useIsBatonnier();
   const { activeEnterprise, navModules } = useEnterpriseWorkspace();
 
-  const primaryNav: NavEntry[] = [];
+  const primaryNav: NavEntry[] = variant === "client" ? [...CLIENT_NAV] : [];
   const seenRoutes = new Set<string>();
-  for (const mod of navModules as any[]) {
-    if (!mod.route_path || seenRoutes.has(mod.route_path)) continue;
-    seenRoutes.add(mod.route_path);
-    const icon = MODULE_ICONS[mod.icon_name as string] ?? Gauge;
-    primaryNav.push({ to: mod.route_path, label: mod.label, icon, exact: mod.route_path === "/tableau-de-bord" });
+  if (variant === "staff") {
+    for (const mod of navModules as any[]) {
+      if (!mod.route_path || seenRoutes.has(mod.route_path)) continue;
+      seenRoutes.add(mod.route_path);
+      const icon = MODULE_ICONS[mod.icon_name as string] ?? Gauge;
+      primaryNav.push({ to: mod.route_path, label: mod.label, icon, exact: mod.route_path === "/tableau-de-bord" });
+    }
   }
 
   const hasLawyerGrade = (activeEnterprise?.grade_names ?? []).some((name: string) => {
@@ -73,11 +85,11 @@ export function AppSidebar() {
     return normalized === "avocat" || normalized === "lawyer";
   });
 
-  if (hasLawyerGrade && !seenRoutes.has("/espace-avocat")) {
+  if (variant === "staff" && hasLawyerGrade && !seenRoutes.has("/espace-avocat")) {
     primaryNav.push({ to: "/espace-avocat", label: "Espace Avocat", icon: Scale });
   }
 
-  if (primaryNav.length === 0) {
+  if (variant === "staff" && primaryNav.length === 0) {
     primaryNav.push({ to: "/espace-avocat", label: "Mon espace", icon: Gauge });
   }
 
@@ -96,12 +108,19 @@ export function AppSidebar() {
             </div>
           )}
         </Link>
-        <EnterpriseSwitcher />
+        {variant === "staff" ? (
+          <EnterpriseSwitcher />
+        ) : !collapsed ? (
+          <div className="mx-2 rounded-md border border-sidebar-border bg-sidebar-accent px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/50">Espace client</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-sidebar-foreground">{clientName || "Client"}</p>
+          </div>
+        ) : null}
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{activeEnterprise?.name ?? "Entreprise"}</SidebarGroupLabel>
+          <SidebarGroupLabel>{variant === "client" ? "Mon espace" : activeEnterprise?.name ?? "Entreprise"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {primaryNav.map((n) => (
@@ -118,7 +137,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isAdmin && (
+        {variant === "staff" && isAdmin && (
           <>
             <SidebarSeparator />
             <SidebarGroup>
@@ -162,7 +181,7 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="px-2 py-1.5 text-[10px] uppercase tracking-[0.15em] text-sidebar-foreground/50">
-          {collapsed ? "SBA" : "Plateforme officielle"}
+          {collapsed ? "MS" : variant === "client" ? "Accès client sécurisé" : "Plateforme officielle"}
         </div>
       </SidebarFooter>
     </Sidebar>

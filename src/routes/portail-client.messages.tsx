@@ -274,7 +274,7 @@ function ClientPortalMessagesPage() {
     .join(" ");
 
   return (
-    <section className="mx-auto flex h-[calc(100vh-1rem)] w-full max-w-[1480px] p-2 sm:h-[calc(100vh-2rem)] sm:p-4 lg:h-screen lg:p-6">
+    <section className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-[1480px] p-2 sm:p-4 lg:p-6">
       <div className="grid min-h-0 w-full overflow-hidden rounded-lg border border-zinc-800 bg-[#090e18] shadow-2xl lg:grid-cols-[350px_minmax(0,1fr)]">
         <aside className={`${mobileThreadOpen ? "hidden lg:flex" : "flex"} min-h-0 flex-col border-zinc-800 bg-[#0b111d] lg:border-r`}>
           <div className="border-b border-zinc-800 px-5 py-5">
