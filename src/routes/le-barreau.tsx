@@ -2,8 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/site/PageHeader";
 import { CmsSection } from "@/components/site/CmsSection";
 import { Card, CardContent } from "@/components/ui/card";
-import batonnier from "@/assets/batonnier.jpg";
 import { Landmark, Scale, ShieldCheck, Users } from "lucide-react";
+
+const CORPORATE_IMAGE = "/dist/client/assets/Mercer_Stellaria_CORPORATION%20(1).png";
 
 export const Route = createFileRoute("/le-barreau")({
   head: () => ({ meta: [
@@ -35,7 +36,7 @@ function Page() {
         </div>
         <aside className="space-y-6">
           <Card className="overflow-hidden shadow-[var(--shadow-elegant)]">
-            <img src={batonnier} alt="CEO" width={800} height={1000} className="w-full" loading="lazy" />
+            <img src={CORPORATE_IMAGE} alt="CEO" width={800} height={1000} className="w-full" loading="lazy" />
             <CardContent className="border-t-2 border-gold p-5">
               <div className="text-xs uppercase tracking-widest text-muted-foreground">CEO</div>
               <div className="mt-1 font-display text-lg font-bold text-navy-deep">Me Alexander Whitmore</div>

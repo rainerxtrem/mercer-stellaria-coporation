@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import hero from "@/assets/hero-courthouse.jpg";
-import batonnier from "@/assets/batonnier.jpg";
 import logo from "@/assets/ms-logo.png";
 import seal from "@/assets/seal.png";
 import { BRAND } from "@/lib/brand";
@@ -26,6 +25,8 @@ export const Route = createFileRoute("/")({
   ] }),
   component: Home,
 });
+
+const CORPORATE_IMAGE = "/dist/client/assets/Mercer_Stellaria_CORPORATION%20(1).png";
 
 const QUICK_INSURANCE_ACTIONS = [
   {
@@ -131,7 +132,7 @@ function Home() {
           <div className="relative">
             <div className="absolute -inset-4 rounded-2xl bg-gold/20 blur-2xl" aria-hidden />
             <div className="relative overflow-hidden rounded-xl border border-border bg-card shadow-[var(--shadow-elegant)]">
-              <img src={batonnier} alt="Direction générale de Mercer & Stellaria Corporation" width={800} height={1000} loading="lazy" className="w-full object-cover transition-transform duration-700 hover:scale-[1.03]" />
+              <img src={CORPORATE_IMAGE} alt="Direction générale de Mercer & Stellaria Corporation" width={800} height={1000} loading="lazy" className="w-full object-cover transition-transform duration-700 hover:scale-[1.03]" />
               <div className="border-t-2 border-gold p-6">
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Mercer & Stellaria Corporation</div>
                 <div className="mt-1 font-display text-xl font-bold text-foreground">Synergie des expertises</div>
