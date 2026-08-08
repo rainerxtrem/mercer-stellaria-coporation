@@ -5,6 +5,11 @@
 # database is already current, so restarts and rollbacks are safe.
 set -e
 
+if [ "$SERVICE_MODE" = "discord-bot" ]; then
+  echo "==> Starting Discord bot service on port ${PORT:-8080}"
+  exec node server/discord-bot.mjs
+fi
+
 if [ -z "$DATABASE_URL" ]; then
   echo "DATABASE_URL is not set. Attach a PostgreSQL service and expose DATABASE_URL." >&2
   exit 1
