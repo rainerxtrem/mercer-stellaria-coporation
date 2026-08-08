@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, BriefcaseBusiness, Building2, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, Building2, MessageCircle, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -19,7 +19,6 @@ import {
 import { isAccessRelatedMessagingError } from "@/lib/professional-messaging.utils";
 
 type Thread = {
-  kind: "general" | "matter";
   id: string;
   title: string;
   subtitle: string;
@@ -34,9 +33,7 @@ export function ProfessionalMessaging() {
   const endRef = useRef<HTMLDivElement>(null);
   const threadsFn = useServerFn(listProfessionalMessagingThreads);
   const generalMessagesFn = useServerFn(listProfessionalGeneralMessages);
-  const matterMessagesFn = useServerFn(listMatterMessages);
   const sendGeneralFn = useServerFn(sendProfessionalGeneralMessage);
-  const sendMatterFn = useServerFn(sendMatterMessage);
   const markReadFn = useServerFn(markProfessionalConversationRead);
 
   const threadsQ = useQuery({
@@ -55,13 +52,12 @@ export function ProfessionalMessaging() {
     refetchInterval: 4000,
   });
   const threads = useMemo<Thread[]>(() => {
-    const general = (threadsQ.data?.general ?? []).map((conversation: any) => {
+    return (threadsQ.data?.general ?? []).map((conversation: any) => {
       const clientName = [conversation.clients?.last_name, conversation.clients?.first_name]
         .filter(Boolean)
         .join(" ");
       const latest = conversation.latest_message;
       return {
-        kind: "general" as const,
         id: conversation.id,
         title: clientName || "Client",
         subtitle: conversation.subject || "Conversation générale",
@@ -73,30 +69,16 @@ export function ProfessionalMessaging() {
         ),
       };
     });
-    const matters = (threadsQ.data?.matters ?? []).map((matter: any) => ({
-      kind: "matter" as const,
-      id: matter.id,
-      title:
-        [matter.clients?.last_name, matter.clients?.first_name].filter(Boolean).join(" ") ||
-        matter.title,
-      subtitle: `${matter.number || "Dossier"} · ${matter.title}`,
-      latest: matter.latest_message,
-      unread: false,
-    }));
-    return [...general, ...matters].sort((a, b) =>
-      String(b.latest?.created_at ?? "").localeCompare(String(a.latest?.created_at ?? "")),
-    );
   }, [threadsQ.data]);
 
   const [selectedKey, setSelectedKey] = useState("");
   const [body, setBody] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   useEffect(() => {
-    if (!selectedKey && threads[0]) setSelectedKey(`${threads[0].kind}:${threads[0].id}`);
+    if (!selectedKey && threads[0]) setSelectedKey(threads[0].id);
   }, [selectedKey, threads]);
-  const selected = threads.find((thread) => `${thread.kind}:${thread.id}` === selectedKey) ?? null;
-  const selectedGeneralId = selected?.kind === "general" ? selected.id : null;
-  const selectedMatterId = selected?.kind === "matter" ? selected.id : null;
+  const selected = threads.find((thread) => thread.id === selectedKey) ?? null;
+  const selectedGeneralId = selected?.id ?? null;
 
   const generalQ = useQuery({
     queryKey: ["professional-messaging", activeFirmId, "general", selectedGeneralId],
@@ -114,24 +96,7 @@ export function ProfessionalMessaging() {
     },
     refetchInterval: 2500,
   });
-  const matterQ = useQuery({
-    queryKey: ["professional-messaging", activeFirmId, "matter", selectedMatterId],
-    enabled: Boolean(selectedMatterId),
-    queryFn: async () => {
-      if (!selectedMatterId) return [];
-      try {
-        return await matterMessagesFn({ data: { matter_id: selectedMatterId } });
-      } catch (error) {
-        if (isAccessRelatedMessagingError(error)) {
-          return [];
-        }
-        throw error;
-      }
-    },
-    refetchInterval: 2500,
-  });
-  const selectedMessages = selected?.kind === "general" ? generalQ.data : matterQ.data;
-  const messages = Array.isArray(selectedMessages) ? selectedMessages : [];
+  const messages = Array.isArray(generalQ.data) ? generalQ.data : [];
 
   useEffect(() => {
     if (!selectedGeneralId) return;
@@ -150,13 +115,7 @@ export function ProfessionalMessaging() {
   const send = useMutation({
     mutationFn: async () => {
       if (!selected || !body.trim()) return;
-      if (selected.kind === "general") {
-        await sendGeneralFn({ data: { conversation_id: selected.id, body: body.trim() } });
-      } else {
-        await sendMatterFn({
-          data: { matter_id: selected.id, body: body.trim(), internal: false },
-        });
-      }
+      await sendGeneralFn({ data: { conversation_id: selected.id, body: body.trim() } });
     },
     onSuccess: async () => {
       setBody("");
@@ -166,7 +125,7 @@ export function ProfessionalMessaging() {
   });
 
   function selectThread(thread: Thread) {
-    setSelectedKey(`${thread.kind}:${thread.id}`);
+    setSelectedKey(thread.id);
     setMobileOpen(true);
     setBody("");
   }
@@ -198,17 +157,13 @@ export function ProfessionalMessaging() {
             )}
             {threads.map((thread) => (
               <button
-                key={`${thread.kind}:${thread.id}`}
+                key={thread.id}
                 type="button"
                 onClick={() => selectThread(thread)}
-                className={`mb-1 flex w-full items-center gap-3 rounded-md p-3 text-left transition ${selectedKey === `${thread.kind}:${thread.id}` ? "bg-secondary" : "hover:bg-secondary/60"}`}
+                className={`mb-1 flex w-full items-center gap-3 rounded-md p-3 text-left transition ${selectedKey === thread.id ? "bg-secondary" : "hover:bg-secondary/60"}`}
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-background text-navy">
-                  {thread.kind === "general" ? (
-                    <Building2 className="h-4 w-4" />
-                  ) : (
-                    <BriefcaseBusiness className="h-4 w-4" />
-                  )}
+                  <Building2 className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
@@ -251,7 +206,7 @@ export function ProfessionalMessaging() {
                 </div>
               </header>
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-muted/10 px-4 py-6 sm:px-8">
-                {(generalQ.isError || matterQ.isError) && (
+                {generalQ.isError && (
                   <p className="py-8 text-center text-sm text-destructive">Impossible de charger les messages de cette conversation.</p>
                 )}
                 {messages.map((message: any) => {
