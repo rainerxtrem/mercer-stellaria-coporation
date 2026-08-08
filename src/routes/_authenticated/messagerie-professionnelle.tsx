@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_authenticated/messagerie-professionnelle")({
-  component: RouteComponent,
-});
+import { ProfessionalMessaging } from "@/components/app/ProfessionalMessaging";
 
-function RouteComponent() {
-  return <div>Hello "/_authenticated/messagerie-professionnelle"!</div>;
-}
+export const Route = createFileRoute("/_authenticated/messagerie-professionnelle")({
+  head: () => ({ meta: [{ title: "Messagerie professionnelle | Mercer & Stellaria" }] }),
+  component: ProfessionalMessaging,
+});

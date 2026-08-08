@@ -85,35 +85,42 @@ export function ProfessionalMessaging() {
     if (!selectedKey && threads[0]) setSelectedKey(`${threads[0].kind}:${threads[0].id}`);
   }, [selectedKey, threads]);
   const selected = threads.find((thread) => `${thread.kind}:${thread.id}` === selectedKey) ?? null;
+  const selectedGeneralId = selected?.kind === "general" ? selected.id : null;
+  const selectedMatterId = selected?.kind === "matter" ? selected.id : null;
 
   const generalQ = useQuery({
-    queryKey: [
-      "professional-messaging",
-      "general",
-      selected?.kind === "general" ? selected.id : "none",
-    ],
-    enabled: selected?.kind === "general",
-    queryFn: () => generalMessagesFn({ data: { conversation_id: selected!.id } }),
+    queryKey: ["professional-messaging", activeFirmId, "general", selectedGeneralId],
+    enabled: Boolean(selectedGeneralId),
+    queryFn: () =>
+      selectedGeneralId
+        ? generalMessagesFn({ data: { conversation_id: selectedGeneralId } })
+        : Promise.resolve([]),
     refetchInterval: 2500,
   });
   const matterQ = useQuery({
-    queryKey: [
-      "professional-messaging",
-      "matter",
-      selected?.kind === "matter" ? selected.id : "none",
-    ],
-    enabled: selected?.kind === "matter",
-    queryFn: () => matterMessagesFn({ data: { matter_id: selected!.id } }),
+    queryKey: ["professional-messaging", activeFirmId, "matter", selectedMatterId],
+    enabled: Boolean(selectedMatterId),
+    queryFn: () =>
+      selectedMatterId
+        ? matterMessagesFn({ data: { matter_id: selectedMatterId } })
+        : Promise.resolve([]),
     refetchInterval: 2500,
   });
-  const messages = selected?.kind === "general" ? (generalQ.data ?? []) : (matterQ.data ?? []);
+  const selectedMessages = selected?.kind === "general" ? generalQ.data : matterQ.data;
+  const messages = Array.isArray(selectedMessages) ? selectedMessages : [];
 
   useEffect(() => {
-    if (selected?.kind !== "general") return;
-    void markReadFn({ data: { conversation_id: selected.id } }).then(() =>
-      queryClient.invalidateQueries({ queryKey: ["professional-messaging", "threads"] }),
-    );
-  }, [markReadFn, queryClient, selected]);
+    if (!selectedGeneralId) return;
+    void markReadFn({ data: { conversation_id: selectedGeneralId } })
+      .then(() =>
+        queryClient.invalidateQueries({
+          queryKey: ["professional-messaging", activeFirmId, "threads"],
+        }),
+      )
+      .catch((error) => {
+        console.error("[messaging] unable to mark conversation as read", error);
+      });
+  }, [activeFirmId, markReadFn, queryClient, selectedGeneralId]);
   useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [messages.length, selectedKey]);
 
   const send = useMutation({
