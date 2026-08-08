@@ -8,6 +8,7 @@ import { getClientProfile } from "@/lib/client-portal.functions";
 export function ClientPortalShell({ children }: { children: ReactNode }) {
   const profileFn = useServerFn(getClientProfile);
   const profileQ = useQuery({ queryKey: ["client-portal", "profile", "shell"], queryFn: () => profileFn() });
-  const displayName = [profileQ.data?.last_name, profileQ.data?.first_name].filter(Boolean).join(" ") || "Client";
+  const fullName = [profileQ.data?.last_name, profileQ.data?.first_name].filter(Boolean).join(" ");
+  const displayName = fullName || (profileQ.isError ? "Profil indisponible" : "Chargement...");
   return <AppShell variant="client" displayName={displayName}>{children}</AppShell>;
 }

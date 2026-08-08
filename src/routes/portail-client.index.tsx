@@ -5,6 +5,7 @@ import { Bell, Building2, ChevronRight, FileCheck2, Files, MessageSquare, Receip
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { getClientDashboard, listClientConversations } from "@/lib/client-portal.functions";
 
 export const Route = createFileRoute("/portail-client/")({
@@ -30,6 +31,20 @@ function ClientPortalDashboard() {
 
   const d: any = dashboardQ.data;
 
+  if (dashboardQ.isError) {
+    return (
+      <section className="mx-auto w-full max-w-6xl px-5 py-16 lg:px-8">
+        <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-6">
+          <h1 className="font-display text-xl font-semibold text-zinc-50">Espace client temporairement indisponible</h1>
+          <p className="mt-2 text-sm text-zinc-400">Vos informations n'ont pas pu être chargées. Aucun accès supplémentaire n'a été accordé.</p>
+          <Button type="button" variant="outline" className="mt-4" onClick={() => dashboardQ.refetch()}>
+            Réessayer
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="mx-auto w-full max-w-6xl px-5 py-8 lg:px-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -38,7 +53,7 @@ function ClientPortalDashboard() {
           <h1 className="font-display text-2xl font-semibold text-zinc-50">
             {d
               ? `Bienvenue ${[d.client.last_name, d.client.first_name].filter(Boolean).join(" ")}`
-              : "Chargement"}
+              : "Chargement..."}
           </h1>
           <p className="mt-1 text-sm text-zinc-400">Vos entreprises, dossiers et échanges réunis au même endroit.</p>
         </div>
