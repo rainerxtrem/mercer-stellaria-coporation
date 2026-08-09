@@ -16,6 +16,7 @@ import { upsertLawyer, deleteLawyer, setLawyerStatus, listLawyersAdmin } from "@
 import { inviteLawyer } from "@/lib/invitations.functions";
 import { createLawyerAccount } from "@/lib/lawyer-accounts.functions";
 import { listUserRoles, setUserRoles } from "@/lib/roles-admin.functions";
+import type { AppRoleServer } from "@/lib/roles-admin.functions";
 import { ALL_APP_ROLES, ROLE_LABELS, type AppRole } from "@/lib/auth";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -330,7 +331,7 @@ function Page() {
         onClose={() => setRolesFor(null)}
         loadRoles={async (userId) => (await listRoles({ data: { user_id: userId } })) as AppRole[]}
         onSave={async (userId, roles) => {
-          await saveRoles({ data: { user_id: userId, roles } });
+          await saveRoles({ data: { user_id: userId, roles: roles as AppRoleServer[] } });
           window.dispatchEvent(new CustomEvent("sba:roles-changed"));
           toast.success("Rôles mis à jour.");
           setRolesFor(null);

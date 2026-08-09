@@ -362,8 +362,29 @@ function normaliseRows(values: unknown): Record<string, unknown>[] {
   return rows as Record<string, unknown>[];
 }
 
-function encodeValue(value: unknown): unknown {
+function isJsonColumn(udtName?: string): boolean {
+  return udtName === "json" || udtName === "jsonb";
+}
+
+function encodeJsonValue(value: unknown): unknown {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return JSON.stringify("");
+    try {
+      JSON.parse(trimmed);
+      return trimmed;
+    } catch {
+      return JSON.stringify(value);
+    }
+  }
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  return JSON.stringify(value);
+}
+
+function encodeValue(value: unknown, udtName?: string): unknown {
   if (value === undefined) return null;
+  if (isJsonColumn(udtName)) return encodeJsonValue(value);
   if (
     value !== null &&
     typeof value === "object" &&
@@ -516,7 +537,7 @@ function compileMutation(
           `(${columns
             .map((column) =>
               column in row && row[column] !== undefined
-                ? params.add(encodeValue(row[column]))
+                ? params.add(encodeValue(row[column], table.columns.get(column)?.udtName))
                 : spec.defaultToNull === false
                   ? "DEFAULT"
                   : params.add(null),
@@ -551,7 +572,9 @@ function compileMutation(
     const [row] = normaliseRows(spec.values);
     const assignments = Object.entries(row)
       .filter(([, value]) => value !== undefined)
-      .map(([column, value]) => `${quoteIdent(column)} = ${params.add(encodeValue(value))}`);
+      .map(([column, value]) =>
+        `${quoteIdent(column)} = ${params.add(encodeValue(value, table.columns.get(column)?.udtName))}`,
+      );
     if (assignments.length === 0) throw new CompileError("Nothing to update", "22023");
     mutation = `UPDATE ${relation} SET ${assignments.join(", ")}${renderWhere(spec.conditions, {
       qualifier: null,

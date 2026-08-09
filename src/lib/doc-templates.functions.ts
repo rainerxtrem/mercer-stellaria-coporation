@@ -9,25 +9,40 @@ async function getRoles(ctx: { supabase: any; userId: string }): Promise<string[
   return (data ?? []).map((r: any) => r.role as string);
 }
 
-async function getMyFirmId(ctx: { userId: string }): Promise<string | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
-    .from("lawyers").select("firm_id").eq("profile_id", ctx.userId).maybeSingle();
-  return ((data as any)?.firm_id ?? null) as string | null;
+async function getActiveFirmId(ctx: { supabase: any; userId: string; claims?: Record<string, unknown> }): Promise<string | null> {
+  const fromClaims = (ctx.claims?.firm_id as string | undefined) ?? null;
+  if (fromClaims) return fromClaims;
+  const { data: profile } = await ctx.supabase
+    .from("profiles")
+    .select("active_firm_id")
+    .eq("id", ctx.userId)
+    .maybeSingle();
+  return (profile?.active_firm_id as string | null) ?? null;
 }
 
 /** Résout le cabinet cible + les droits de l'utilisateur courant. */
 async function resolveScope(context: any, firmId?: string) {
   const roles = await getRoles(context);
   const isBatonnier = roles.includes("batonnier");
-  const myFirmId = await getMyFirmId(context);
+  const myFirmId = await getActiveFirmId(context);
   const targetFirmId = (isBatonnier ? (firmId ?? myFirmId) : myFirmId) ?? null;
   if (firmId && !isBatonnier && firmId !== myFirmId) {
     throw new Error("Accès refusé à ce cabinet.");
   }
-  // Tout membre d'un cabinet peut gérer les modèles de SON cabinet.
-  const canManage = isBatonnier || (!!myFirmId && myFirmId === targetFirmId);
+  const canManage = Boolean(targetFirmId);
   return { roles, isBatonnier, myFirmId, targetFirmId, canManage };
+}
+
+async function assertCategoryInFirm(context: any, categoryId: string | null | undefined, firmId: string) {
+  if (!categoryId) return;
+  const { data, error } = await context.supabase
+    .from("doc_template_categories")
+    .select("id")
+    .eq("id", categoryId)
+    .eq("firm_id", firmId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Le dossier sélectionné n'appartient pas à l'entreprise active.");
 }
 
 function assertManage(scope: { canManage: boolean }) {
@@ -209,6 +224,7 @@ export const createTemplate = createServerFn({ method: "POST" })
     const scope = await resolveScope(context, data.firmId);
     assertManage(scope);
     if (!scope.targetFirmId) throw new Error("Aucun cabinet cible.");
+    await assertCategoryInFirm(context, data.category_id, scope.targetFirmId);
     const kind = kindFromMime(data.file.mime_type, data.file.file_name);
     const { data: tpl, error } = await context.supabase
       .from("doc_templates")
@@ -258,6 +274,16 @@ export const updateTemplate = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const scope = await resolveScope(context);
     assertManage(scope);
+    const { data: existing, error: existingError } = await context.supabase
+      .from("doc_templates")
+      .select("firm_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (!existing) throw new Error("Modèle introuvable.");
+    if (data.category_id !== undefined) {
+      await assertCategoryInFirm(context, data.category_id, (existing as any).firm_id as string);
+    }
     const patch: any = {};
     if (data.name !== undefined) patch['name'] = data.name;
     if (data.description !== undefined) patch['description'] = data.description;

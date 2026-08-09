@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listFirmMembers, inviteFirmMember, removeFirmMember } from "@/lib/firm-admin.functions";
 import { listUserRoles, setUserRoles } from "@/lib/roles-admin.functions";
+import type { AppRoleServer } from "@/lib/roles-admin.functions";
 import { ROLE_LABELS, type AppRole } from "@/lib/auth";
 import { PageHeader } from "@/components/site/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -156,7 +157,7 @@ function Page() {
         onClose={() => setRolesFor(null)}
         loadRoles={async (userId) => (await listRoles({ data: { user_id: userId } })) as AppRole[]}
         onSave={async (userId, roles) => {
-          await saveRoles({ data: { user_id: userId, roles } });
+          await saveRoles({ data: { user_id: userId, roles: roles as AppRoleServer[] } });
           window.dispatchEvent(new CustomEvent("sba:roles-changed"));
           toast.success("Rôles du membre mis à jour.");
           setRolesFor(null);
