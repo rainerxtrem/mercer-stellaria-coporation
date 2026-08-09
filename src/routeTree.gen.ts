@@ -44,6 +44,8 @@ import { Route as AuthenticatedExaminateurRouteImport } from './routes/_authenti
 import { Route as AuthenticatedFormateurRouteImport } from './routes/_authenticated/formateur'
 import { Route as AuthenticatedMesDossiersDisciplinairesRouteImport } from './routes/_authenticated/mes-dossiers-disciplinaires'
 import { Route as AuthenticatedMessagerieProfessionnelleRouteImport } from './routes/_authenticated/messagerie-professionnelle'
+import { Route as AuthenticatedRemboursementsRouteImport } from './routes/_authenticated/remboursements'
+import { Route as AuthenticatedSinistresRouteImport } from './routes/_authenticated/sinistres'
 import { Route as AuthenticatedTableauDeBordRouteImport } from './routes/_authenticated/tableau-de-bord'
 import { Route as AuthenticatedTachesRouteImport } from './routes/_authenticated/taches'
 import { Route as ApiDbRouteImport } from './routes/api/db'
@@ -55,7 +57,9 @@ import { Route as PortailClientDocumentsRouteImport } from './routes/portail-cli
 import { Route as PortailClientDossiersRouteImport } from './routes/portail-client.dossiers'
 import { Route as PortailClientMessagesRouteImport } from './routes/portail-client.messages'
 import { Route as PortailClientNotificationsRouteImport } from './routes/portail-client.notifications'
+import { Route as PortailClientRemboursementsRouteImport } from './routes/portail-client.remboursements'
 import { Route as PortailClientSignaturesRouteImport } from './routes/portail-client.signatures'
+import { Route as PortailClientSinistresRouteImport } from './routes/portail-client.sinistres'
 import { Route as SignatureTokenRouteImport } from './routes/signature.$token'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminActualitesRouteImport } from './routes/_authenticated/admin.actualites'
@@ -282,6 +286,17 @@ const AuthenticatedMessagerieProfessionnelleRoute =
     path: '/messagerie-professionnelle',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedRemboursementsRoute =
+  AuthenticatedRemboursementsRouteImport.update({
+    id: '/remboursements',
+    path: '/remboursements',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSinistresRoute = AuthenticatedSinistresRouteImport.update({
+  id: '/sinistres',
+  path: '/sinistres',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTableauDeBordRoute =
   AuthenticatedTableauDeBordRouteImport.update({
     id: '/tableau-de-bord',
@@ -339,9 +354,20 @@ const PortailClientNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => PortailClientRoute,
   } as any)
+const PortailClientRemboursementsRoute =
+  PortailClientRemboursementsRouteImport.update({
+    id: '/remboursements',
+    path: '/remboursements',
+    getParentRoute: () => PortailClientRoute,
+  } as any)
 const PortailClientSignaturesRoute = PortailClientSignaturesRouteImport.update({
   id: '/signatures',
   path: '/signatures',
+  getParentRoute: () => PortailClientRoute,
+} as any)
+const PortailClientSinistresRoute = PortailClientSinistresRouteImport.update({
+  id: '/sinistres',
+  path: '/sinistres',
   getParentRoute: () => PortailClientRoute,
 } as any)
 const SignatureTokenRoute = SignatureTokenRouteImport.update({
@@ -646,6 +672,8 @@ export interface FileRoutesByFullPath {
   '/formateur': typeof AuthenticatedFormateurRoute
   '/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
   '/messagerie-professionnelle': typeof AuthenticatedMessagerieProfessionnelleRoute
+  '/remboursements': typeof AuthenticatedRemboursementsRoute
+  '/sinistres': typeof AuthenticatedSinistresRoute
   '/tableau-de-bord': typeof AuthenticatedTableauDeBordRoute
   '/taches': typeof AuthenticatedTachesRoute
   '/api/db': typeof ApiDbRoute
@@ -656,7 +684,9 @@ export interface FileRoutesByFullPath {
   '/portail-client/dossiers': typeof PortailClientDossiersRouteWithChildren
   '/portail-client/messages': typeof PortailClientMessagesRoute
   '/portail-client/notifications': typeof PortailClientNotificationsRoute
+  '/portail-client/remboursements': typeof PortailClientRemboursementsRoute
   '/portail-client/signatures': typeof PortailClientSignaturesRoute
+  '/portail-client/sinistres': typeof PortailClientSinistresRoute
   '/signature/$token': typeof SignatureTokenRoute
   '/portail-client/': typeof PortailClientIndexRoute
   '/admin/actualites': typeof AuthenticatedAdminActualitesRoute
@@ -738,6 +768,8 @@ export interface FileRoutesByTo {
   '/formateur': typeof AuthenticatedFormateurRoute
   '/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
   '/messagerie-professionnelle': typeof AuthenticatedMessagerieProfessionnelleRoute
+  '/remboursements': typeof AuthenticatedRemboursementsRoute
+  '/sinistres': typeof AuthenticatedSinistresRoute
   '/tableau-de-bord': typeof AuthenticatedTableauDeBordRoute
   '/taches': typeof AuthenticatedTachesRoute
   '/api/db': typeof ApiDbRoute
@@ -748,7 +780,9 @@ export interface FileRoutesByTo {
   '/portail-client/dossiers': typeof PortailClientDossiersRouteWithChildren
   '/portail-client/messages': typeof PortailClientMessagesRoute
   '/portail-client/notifications': typeof PortailClientNotificationsRoute
+  '/portail-client/remboursements': typeof PortailClientRemboursementsRoute
   '/portail-client/signatures': typeof PortailClientSignaturesRoute
+  '/portail-client/sinistres': typeof PortailClientSinistresRoute
   '/signature/$token': typeof SignatureTokenRoute
   '/portail-client': typeof PortailClientIndexRoute
   '/admin/actualites': typeof AuthenticatedAdminActualitesRoute
@@ -833,6 +867,8 @@ export interface FileRoutesById {
   '/_authenticated/formateur': typeof AuthenticatedFormateurRoute
   '/_authenticated/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
   '/_authenticated/messagerie-professionnelle': typeof AuthenticatedMessagerieProfessionnelleRoute
+  '/_authenticated/remboursements': typeof AuthenticatedRemboursementsRoute
+  '/_authenticated/sinistres': typeof AuthenticatedSinistresRoute
   '/_authenticated/tableau-de-bord': typeof AuthenticatedTableauDeBordRoute
   '/_authenticated/taches': typeof AuthenticatedTachesRoute
   '/api/db': typeof ApiDbRoute
@@ -843,7 +879,9 @@ export interface FileRoutesById {
   '/portail-client/dossiers': typeof PortailClientDossiersRouteWithChildren
   '/portail-client/messages': typeof PortailClientMessagesRoute
   '/portail-client/notifications': typeof PortailClientNotificationsRoute
+  '/portail-client/remboursements': typeof PortailClientRemboursementsRoute
   '/portail-client/signatures': typeof PortailClientSignaturesRoute
+  '/portail-client/sinistres': typeof PortailClientSinistresRoute
   '/signature/$token': typeof SignatureTokenRoute
   '/portail-client/': typeof PortailClientIndexRoute
   '/_authenticated/admin/actualites': typeof AuthenticatedAdminActualitesRoute
@@ -929,6 +967,8 @@ export interface FileRouteTypes {
     | '/formateur'
     | '/mes-dossiers-disciplinaires'
     | '/messagerie-professionnelle'
+    | '/remboursements'
+    | '/sinistres'
     | '/tableau-de-bord'
     | '/taches'
     | '/api/db'
@@ -939,7 +979,9 @@ export interface FileRouteTypes {
     | '/portail-client/dossiers'
     | '/portail-client/messages'
     | '/portail-client/notifications'
+    | '/portail-client/remboursements'
     | '/portail-client/signatures'
+    | '/portail-client/sinistres'
     | '/signature/$token'
     | '/portail-client/'
     | '/admin/actualites'
@@ -1021,6 +1063,8 @@ export interface FileRouteTypes {
     | '/formateur'
     | '/mes-dossiers-disciplinaires'
     | '/messagerie-professionnelle'
+    | '/remboursements'
+    | '/sinistres'
     | '/tableau-de-bord'
     | '/taches'
     | '/api/db'
@@ -1031,7 +1075,9 @@ export interface FileRouteTypes {
     | '/portail-client/dossiers'
     | '/portail-client/messages'
     | '/portail-client/notifications'
+    | '/portail-client/remboursements'
     | '/portail-client/signatures'
+    | '/portail-client/sinistres'
     | '/signature/$token'
     | '/portail-client'
     | '/admin/actualites'
@@ -1115,6 +1161,8 @@ export interface FileRouteTypes {
     | '/_authenticated/formateur'
     | '/_authenticated/mes-dossiers-disciplinaires'
     | '/_authenticated/messagerie-professionnelle'
+    | '/_authenticated/remboursements'
+    | '/_authenticated/sinistres'
     | '/_authenticated/tableau-de-bord'
     | '/_authenticated/taches'
     | '/api/db'
@@ -1125,7 +1173,9 @@ export interface FileRouteTypes {
     | '/portail-client/dossiers'
     | '/portail-client/messages'
     | '/portail-client/notifications'
+    | '/portail-client/remboursements'
     | '/portail-client/signatures'
+    | '/portail-client/sinistres'
     | '/signature/$token'
     | '/portail-client/'
     | '/_authenticated/admin/actualites'
@@ -1464,6 +1514,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMessagerieProfessionnelleRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/remboursements': {
+      id: '/_authenticated/remboursements'
+      path: '/remboursements'
+      fullPath: '/remboursements'
+      preLoaderRoute: typeof AuthenticatedRemboursementsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/sinistres': {
+      id: '/_authenticated/sinistres'
+      path: '/sinistres'
+      fullPath: '/sinistres'
+      preLoaderRoute: typeof AuthenticatedSinistresRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/tableau-de-bord': {
       id: '/_authenticated/tableau-de-bord'
       path: '/tableau-de-bord'
@@ -1541,11 +1605,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortailClientNotificationsRouteImport
       parentRoute: typeof PortailClientRoute
     }
+    '/portail-client/remboursements': {
+      id: '/portail-client/remboursements'
+      path: '/remboursements'
+      fullPath: '/portail-client/remboursements'
+      preLoaderRoute: typeof PortailClientRemboursementsRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
     '/portail-client/signatures': {
       id: '/portail-client/signatures'
       path: '/signatures'
       fullPath: '/portail-client/signatures'
       preLoaderRoute: typeof PortailClientSignaturesRouteImport
+      parentRoute: typeof PortailClientRoute
+    }
+    '/portail-client/sinistres': {
+      id: '/portail-client/sinistres'
+      path: '/sinistres'
+      fullPath: '/portail-client/sinistres'
+      preLoaderRoute: typeof PortailClientSinistresRouteImport
       parentRoute: typeof PortailClientRoute
     }
     '/signature/$token': {
@@ -1981,6 +2059,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFormateurRoute: typeof AuthenticatedFormateurRoute
   AuthenticatedMesDossiersDisciplinairesRoute: typeof AuthenticatedMesDossiersDisciplinairesRoute
   AuthenticatedMessagerieProfessionnelleRoute: typeof AuthenticatedMessagerieProfessionnelleRoute
+  AuthenticatedRemboursementsRoute: typeof AuthenticatedRemboursementsRoute
+  AuthenticatedSinistresRoute: typeof AuthenticatedSinistresRoute
   AuthenticatedTableauDeBordRoute: typeof AuthenticatedTableauDeBordRoute
   AuthenticatedTachesRoute: typeof AuthenticatedTachesRoute
   AuthenticatedCabinetDossiersRoute: typeof AuthenticatedCabinetDossiersRoute
@@ -2010,6 +2090,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedMesDossiersDisciplinairesRoute,
   AuthenticatedMessagerieProfessionnelleRoute:
     AuthenticatedMessagerieProfessionnelleRoute,
+  AuthenticatedRemboursementsRoute: AuthenticatedRemboursementsRoute,
+  AuthenticatedSinistresRoute: AuthenticatedSinistresRoute,
   AuthenticatedTableauDeBordRoute: AuthenticatedTableauDeBordRoute,
   AuthenticatedTachesRoute: AuthenticatedTachesRoute,
   AuthenticatedCabinetDossiersRoute: AuthenticatedCabinetDossiersRoute,
@@ -2064,7 +2146,9 @@ interface PortailClientRouteChildren {
   PortailClientDossiersRoute: typeof PortailClientDossiersRouteWithChildren
   PortailClientMessagesRoute: typeof PortailClientMessagesRoute
   PortailClientNotificationsRoute: typeof PortailClientNotificationsRoute
+  PortailClientRemboursementsRoute: typeof PortailClientRemboursementsRoute
   PortailClientSignaturesRoute: typeof PortailClientSignaturesRoute
+  PortailClientSinistresRoute: typeof PortailClientSinistresRoute
   PortailClientIndexRoute: typeof PortailClientIndexRoute
 }
 
@@ -2074,7 +2158,9 @@ const PortailClientRouteChildren: PortailClientRouteChildren = {
   PortailClientDossiersRoute: PortailClientDossiersRouteWithChildren,
   PortailClientMessagesRoute: PortailClientMessagesRoute,
   PortailClientNotificationsRoute: PortailClientNotificationsRoute,
+  PortailClientRemboursementsRoute: PortailClientRemboursementsRoute,
   PortailClientSignaturesRoute: PortailClientSignaturesRoute,
+  PortailClientSinistresRoute: PortailClientSinistresRoute,
   PortailClientIndexRoute: PortailClientIndexRoute,
 }
 

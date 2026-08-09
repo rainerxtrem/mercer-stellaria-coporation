@@ -25,6 +25,8 @@ import {
   ScrollText,
   Settings,
   ChevronRight,
+  ShieldAlert,
+  ReceiptText,
   GraduationCap,
   Home,
   Inbox,
@@ -52,6 +54,8 @@ const CLIENT_NAV: NavEntry[] = [
   { to: "/portail-client/dossiers", label: "Mes dossiers", icon: FolderOpen },
   { to: "/portail-client/documents", label: "Documents", icon: FileText },
   { to: "/portail-client/signatures", label: "Factures & signatures", icon: FileCheck2 },
+  { to: "/portail-client/sinistres", label: "Sinistres", icon: ShieldAlert },
+  { to: "/portail-client/remboursements", label: "Remboursements", icon: ReceiptText },
   { to: "/portail-client/notifications", label: "Notifications", icon: Bell },
 ];
 
@@ -88,6 +92,8 @@ const MODULE_ICONS: Record<string, typeof Shield> = {
   GraduationCap,
   Scale,
   DollarSign,
+  ShieldAlert,
+  ReceiptText,
 };
 
 export function AppSidebar({

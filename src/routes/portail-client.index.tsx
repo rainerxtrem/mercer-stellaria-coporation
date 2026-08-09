@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Building2, ChevronRight, FileCheck2, Files, MessageSquare, ReceiptText, Scale } from "lucide-react";
+import { Bell, Building2, ChevronRight, FileCheck2, Files, MessageSquare, ReceiptText, Scale, ShieldAlert } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getClientDashboard, listClientConversations } from "@/lib/client-portal.functions";
+import { listClientInsuranceModules } from "@/lib/insurance-requests.functions";
 
 export const Route = createFileRoute("/portail-client/")({
   head: () => ({
@@ -20,6 +21,7 @@ const numberFmt = new Intl.NumberFormat("fr-FR");
 function ClientPortalDashboard() {
   const dashboardFn = useServerFn(getClientDashboard);
   const conversationsFn = useServerFn(listClientConversations);
+  const modulesFn = useServerFn(listClientInsuranceModules);
   const dashboardQ = useQuery({
     queryKey: ["client-portal", "dashboard"],
     queryFn: () => dashboardFn(),
@@ -27,6 +29,10 @@ function ClientPortalDashboard() {
   const conversationsQ = useQuery({
     queryKey: ["client-portal", "conversations"],
     queryFn: () => conversationsFn(),
+  });
+  const modulesQ = useQuery({
+    queryKey: ["client-portal", "modules"],
+    queryFn: () => modulesFn(),
   });
 
   const d: any = dashboardQ.data;
@@ -61,6 +67,27 @@ function ClientPortalDashboard() {
       </div>
 
       <div className="mb-6">
+        {(modulesQ.data?.modules ?? []).length > 0 && (
+          <div className="mb-4 grid gap-3 md:grid-cols-2">
+            {(modulesQ.data?.modules ?? []).includes("claims") && (
+              <ActionBanner
+                icon={ShieldAlert}
+                title="Déclarer un sinistre"
+                text="Lancer un dossier, déposer des pièces et suivre l'avancement."
+                to="/portail-client/sinistres"
+              />
+            )}
+            {(modulesQ.data?.modules ?? []).includes("refunds") && (
+              <ActionBanner
+                icon={ReceiptText}
+                title="Demander un remboursement"
+                text="Centraliser vos justificatifs et suivre le traitement."
+                to="/portail-client/remboursements"
+              />
+            )}
+          </div>
+        )}
+
         <div className="mb-3 flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Mes entreprises</p>
@@ -150,6 +177,22 @@ function CompanyAction({ to, icon: Icon, label }: { to: string; icon: any; label
     <Link to={to} className="flex min-w-0 flex-col items-center gap-1 px-1 py-3 text-[10px] text-zinc-500 transition hover:bg-zinc-800/50 hover:text-amber-300">
       <Icon className="h-4 w-4" />
       <span className="max-w-full truncate">{label}</span>
+    </Link>
+  );
+}
+
+function ActionBanner({ icon: Icon, title, text, to }: { icon: any; title: string; text: string; to: string }) {
+  return (
+    <Link to={to} className="group rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 transition hover:border-amber-500/40 hover:shadow-lg">
+      <div className="flex items-start gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-300 transition group-hover:scale-105">
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-zinc-100">{title}</span>
+          <span className="mt-1 block text-xs text-zinc-500">{text}</span>
+        </span>
+      </div>
     </Link>
   );
 }
