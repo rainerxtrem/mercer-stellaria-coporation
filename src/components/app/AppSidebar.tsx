@@ -1,14 +1,41 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
-  SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
-  SidebarSeparator, useSidebar,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
-  Gauge, FolderOpen, Users, FileText,
-  Shield, Building2, Newspaper, BookOpen, ScrollText, Settings,
-  ChevronRight, GraduationCap, Home, Inbox, CheckSquare, Scale, DollarSign, FileStack,
-  Receipt, FileCheck2, MessageSquare, CalendarDays,
+  Gauge,
+  FolderOpen,
+  Users,
+  FileText,
+  Shield,
+  Building2,
+  Newspaper,
+  BookOpen,
+  ScrollText,
+  Settings,
+  ChevronRight,
+  GraduationCap,
+  Home,
+  Inbox,
+  CheckSquare,
+  Scale,
+  DollarSign,
+  FileStack,
+  Receipt,
+  FileCheck2,
+  MessageSquare,
+  CalendarDays,
   Bell,
 } from "lucide-react";
 import seal from "@/assets/seal.png";
@@ -29,20 +56,20 @@ const CLIENT_NAV: NavEntry[] = [
 ];
 
 const ADMIN_NAV: NavEntry[] = [
-  { to: "/admin",              label: "Vue direction",   icon: Shield, exact: true },
-  { to: "/admin/enterprises",  label: "Entreprises",     icon: Building2 },
-  { to: "/admin/avocats",      label: "Avocats",         icon: Users },
-  { to: "/admin/cabinets",     label: "Cabinets",        icon: Building2 },
-  { to: "/admin/examens",      label: "Examens",         icon: GraduationCap },
-  { to: "/admin/formations",   label: "Formations",      icon: GraduationCap },
-  { to: "/admin/actualites",   label: "Actualités",      icon: Newspaper },
-  { to: "/admin/bibliotheque", label: "Bibliothèque",    icon: BookOpen },
-  { to: "/admin/contenus",     label: "Contenus du site",icon: Settings },
-  { to: "/admin/demandes",     label: "Demandes de contact", icon: Inbox },
-  { to: "/admin/roles",        label: "Rôles & accès",   icon: Shield },
-  { to: "/admin/journal",      label: "Journal d'audit", icon: ScrollText },
-  { to: "/admin/discipline",   label: "Discipline",      icon: Scale },
-  { to: "/admin/sauvegardes",  label: "Sauvegardes",     icon: Settings },
+  { to: "/admin", label: "Vue direction", icon: Shield, exact: true },
+  { to: "/admin/enterprises", label: "Entreprises", icon: Building2 },
+  { to: "/admin/avocats", label: "Avocats", icon: Users },
+  { to: "/admin/cabinets", label: "Cabinets", icon: Building2 },
+  { to: "/admin/examens", label: "Examens", icon: GraduationCap },
+  { to: "/admin/formations", label: "Formations", icon: GraduationCap },
+  { to: "/admin/actualites", label: "Actualités", icon: Newspaper },
+  { to: "/admin/bibliotheque", label: "Bibliothèque", icon: BookOpen },
+  { to: "/admin/contenus", label: "Contenus du site", icon: Settings },
+  { to: "/admin/demandes", label: "Demandes de contact", icon: Inbox },
+  { to: "/admin/roles", label: "Rôles & accès", icon: Shield },
+  { to: "/admin/journal", label: "Journal d'audit", icon: ScrollText },
+  { to: "/admin/discipline", label: "Discipline", icon: Scale },
+  { to: "/admin/sauvegardes", label: "Sauvegardes", icon: Settings },
 ];
 
 const MODULE_ICONS: Record<string, typeof Shield> = {
@@ -63,22 +90,38 @@ const MODULE_ICONS: Record<string, typeof Shield> = {
   DollarSign,
 };
 
-export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff" | "client"; clientName?: string }) {
+export function AppSidebar({
+  variant = "staff",
+  clientName,
+}: {
+  variant?: "staff" | "client";
+  clientName?: string;
+}) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const locationSearch = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
+  const locationSearch = useRouterState({
+    select: (s) => s.location.search as Record<string, unknown>,
+  });
   const isAdmin = useIsBatonnier();
   const { activeEnterprise, navModules } = useEnterpriseWorkspace();
 
   const primaryNav: NavEntry[] = variant === "client" ? [...CLIENT_NAV] : [];
   const seenRoutes = new Set<string>();
   if (variant === "staff") {
-    for (const mod of navModules as any[]) {
+    for (const mod of navModules) {
       if (!mod.route_path || seenRoutes.has(mod.route_path)) continue;
       seenRoutes.add(mod.route_path);
       const icon = MODULE_ICONS[mod.icon_name as string] ?? Gauge;
-      primaryNav.push({ to: mod.route_path, label: mod.label, icon, exact: mod.route_path === "/tableau-de-bord" });
+      primaryNav.push({
+        to: mod.route_path,
+        label: mod.label,
+        icon,
+        exact: mod.route_path === "/tableau-de-bord",
+      });
+    }
+    if (!seenRoutes.has("/dossiers?messagerie=1")) {
+      primaryNav.push({ to: "/dossiers?messagerie=1", label: "Messagerie", icon: MessageSquare });
     }
   }
 
@@ -98,8 +141,12 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
   const isActive = (to: string, exact?: boolean) => {
     const routePath = to.split("?")[0];
     const isMessagingView = parseBooleanSearchParam(locationSearch.messagerie);
-    if (to.includes("messagerie=1")) return pathname === routePath && isMessagingView;
-    const matchesPath = exact ? pathname === routePath : pathname === routePath || pathname.startsWith(routePath + "/");
+    if (to.includes("messagerie=1") || to.includes("messagerie=true")) {
+      return pathname === routePath && isMessagingView;
+    }
+    const matchesPath = exact
+      ? pathname === routePath
+      : pathname === routePath || pathname.startsWith(routePath + "/");
     return matchesPath && !(routePath === "/dossiers" && isMessagingView);
   };
 
@@ -110,8 +157,12 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
           <img src={seal} alt="Sceau Mercer & Stellaria" className="h-8 w-8 shrink-0" />
           {!collapsed && (
             <div className="min-w-0 leading-tight">
-              <div className="truncate font-display text-sm font-bold text-sidebar-foreground">Mercer & Stellaria</div>
-              <div className="truncate text-[10px] uppercase tracking-[0.15em] text-sidebar-foreground/60">Corporation</div>
+              <div className="truncate font-display text-sm font-bold text-sidebar-foreground">
+                Mercer & Stellaria
+              </div>
+              <div className="truncate text-[10px] uppercase tracking-[0.15em] text-sidebar-foreground/60">
+                Corporation
+              </div>
             </div>
           )}
         </Link>
@@ -119,15 +170,21 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
           <EnterpriseSwitcher />
         ) : !collapsed ? (
           <div className="mx-2 rounded-md border border-sidebar-border bg-sidebar-accent px-3 py-2">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/50">Espace client</p>
-            <p className="mt-0.5 truncate text-xs font-medium text-sidebar-foreground">{clientName || "Client"}</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/50">
+              Espace client
+            </p>
+            <p className="mt-0.5 truncate text-xs font-medium text-sidebar-foreground">
+              {clientName || "Client"}
+            </p>
           </div>
         ) : null}
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{variant === "client" ? "Mon espace" : activeEnterprise?.name ?? "Entreprise"}</SidebarGroupLabel>
+          <SidebarGroupLabel>
+            {variant === "client" ? "Mon espace" : (activeEnterprise?.name ?? "Entreprise")}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {primaryNav.map((n) => (
@@ -135,7 +192,7 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
                   <SidebarMenuButton asChild isActive={isActive(n.to, n.exact)} tooltip={n.label}>
                     <Link
                       to={n.to.split("?")[0]}
-                      search={n.to.includes("messagerie=1") ? { messagerie: true } : {}}
+                      search={n.to.includes("messagerie=") ? { messagerie: true } : {}}
                     >
                       <n.icon className="h-4 w-4" />
                       <span>{n.label}</span>
@@ -156,7 +213,11 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
                 <SidebarMenu>
                   {ADMIN_NAV.map((n) => (
                     <SidebarMenuItem key={n.to}>
-                      <SidebarMenuButton asChild isActive={isActive(n.to, n.exact)} tooltip={n.label}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive(n.to, n.exact)}
+                        tooltip={n.label}
+                      >
                         <Link to={n.to}>
                           <n.icon className="h-4 w-4" />
                           <span>{n.label}</span>
@@ -191,7 +252,11 @@ export function AppSidebar({ variant = "staff", clientName }: { variant?: "staff
 
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="px-2 py-1.5 text-[10px] uppercase tracking-[0.15em] text-sidebar-foreground/50">
-          {collapsed ? "MS" : variant === "client" ? "Accès client sécurisé" : "Plateforme officielle"}
+          {collapsed
+            ? "MS"
+            : variant === "client"
+              ? "Accès client sécurisé"
+              : "Plateforme officielle"}
         </div>
       </SidebarFooter>
     </Sidebar>

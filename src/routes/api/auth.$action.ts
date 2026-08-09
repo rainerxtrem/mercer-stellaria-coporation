@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
+  adminCreateUser,
   exchangeRecoveryToken,
   getUserFromAccessToken,
   refreshSession,
@@ -18,6 +19,25 @@ async function handle(action: string, request: Request): Promise<Response> {
   const body = await readJson<Body>(request);
 
   switch (action) {
+    case "signup": {
+      const hostname = new URL(request.url).hostname;
+      const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+      if (process.env.NODE_ENV === "production" || !isLoopback) {
+        return json({ message: "Local signup is disabled" }, 404);
+      }
+      const email = String(body.email ?? "").trim().toLowerCase();
+      const password = String(body.password ?? "");
+      const fullName = String(body.full_name ?? "").trim();
+      await adminCreateUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
+      });
+      const session = await signInWithPassword(email, password);
+      return json({ ...session, session, user: session.user });
+    }
+
     case "token": {
       const session = await signInWithPassword(
         String(body.email ?? ""),

@@ -7,13 +7,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 type Ctx = { supabase: any; userId: string; claims?: Record<string, unknown> };
 
 async function isBatonnier(context: Ctx) {
-  const { data, error } = await context.supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", context.userId)
-    .eq("role", "batonnier")
-    .limit(1)
-    .maybeSingle();
+  const { data, error } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).eq("role", "batonnier").limit(1).maybeSingle();
   if (error) throw new Error(error.message);
   return Boolean(data);
 }
@@ -35,10 +29,7 @@ async function assertEnterpriseManager(context: Ctx, firmId: string) {
       },
     },
     async (client) => {
-      const { rows } = await client.query<{ allowed: boolean }>(
-        "select app_private.can_manage_enterprise($1, $2) as allowed",
-        [firmId, context.userId],
-      );
+      const { rows } = await client.query<{ allowed: boolean }>("select app_private.can_manage_enterprise($1, $2) as allowed", [firmId, context.userId]);
       return Boolean(rows[0]?.allowed);
     },
   );
@@ -75,12 +66,8 @@ export const listEnterprisesAdmin = createServerFn({ method: "GET" })
         .from("firms")
         .select("id, number, name, status, logo_url, manager, brand_primary_color, brand_secondary_color, brand_accent_color")
         .order("name", { ascending: true }),
-      context.supabase
-        .from("enterprise_modules")
-        .select("firm_id, module_slug, enabled"),
-      context.supabase
-        .from("enterprise_grades")
-        .select("id, firm_id"),
+      context.supabase.from("enterprise_modules").select("firm_id, module_slug, enabled"),
+      context.supabase.from("enterprise_grades").select("id, firm_id"),
     ]);
     if (error) throw new Error(error.message);
     const byFirmModules = new Map<string, { enabled: number; total: number }>();
@@ -121,15 +108,45 @@ export const createEnterprise = createServerFn({ method: "POST" })
     }) => ({
       number: z.string().trim().min(2).max(30).parse(d.number),
       name: z.string().trim().min(2).max(120).parse(d.name),
-      address: z.string().trim().max(200).nullable().optional().parse(d.address ?? null),
-      manager: z.string().trim().max(120).nullable().optional().parse(d.manager ?? null),
-      logo_url: z.string().trim().url().max(500).nullable().optional().parse(d.logo_url ?? null),
+      address: z
+        .string()
+        .trim()
+        .max(200)
+        .nullable()
+        .optional()
+        .parse(d.address ?? null),
+      manager: z
+        .string()
+        .trim()
+        .max(120)
+        .nullable()
+        .optional()
+        .parse(d.manager ?? null),
+      logo_url: z
+        .string()
+        .trim()
+        .url()
+        .max(500)
+        .nullable()
+        .optional()
+        .parse(d.logo_url ?? null),
       brand_primary_color: colorSchema.parse(d.brand_primary_color ?? null),
       brand_secondary_color: colorSchema.parse(d.brand_secondary_color ?? null),
       brand_accent_color: colorSchema.parse(d.brand_accent_color ?? null),
-      visual_identity: z.record(z.any()).nullable().optional().parse(d.visual_identity ?? {}),
-      settings: z.record(z.any()).nullable().optional().parse(d.settings ?? {}),
-      enabled_module_slugs: z.array(z.string().min(1)).default([]).parse(d.enabled_module_slugs ?? []),
+      visual_identity: z
+        .record(z.any())
+        .nullable()
+        .optional()
+        .parse(d.visual_identity ?? {}),
+      settings: z
+        .record(z.any())
+        .nullable()
+        .optional()
+        .parse(d.settings ?? {}),
+      enabled_module_slugs: z
+        .array(z.string().min(1))
+        .default([])
+        .parse(d.enabled_module_slugs ?? []),
     }),
   )
   .handler(async ({ data, context }) => {
@@ -157,10 +174,7 @@ export const createEnterprise = createServerFn({ method: "POST" })
 
     const firmId = created.id as string;
 
-    const { data: catalog, error: cErr } = await context.supabase
-      .from("enterprise_module_catalog")
-      .select("slug")
-      .eq("is_active", true);
+    const { data: catalog, error: cErr } = await context.supabase.from("enterprise_module_catalog").select("slug").eq("is_active", true);
     if (cErr) throw new Error(cErr.message);
 
     const enabledSet = new Set(data.enabled_module_slugs);
@@ -175,12 +189,7 @@ export const createEnterprise = createServerFn({ method: "POST" })
       if (mErr) throw new Error(mErr.message);
     }
 
-    const { data: managerGrade } = await context.supabase
-      .from("enterprise_grades")
-      .select("id")
-      .eq("firm_id", firmId)
-      .eq("code", "manager")
-      .maybeSingle();
+    const { data: managerGrade } = await context.supabase.from("enterprise_grades").select("id").eq("firm_id", firmId).eq("code", "manager").maybeSingle();
 
     const { data: membership } = await context.supabase
       .from("enterprise_memberships")
@@ -226,7 +235,9 @@ export const getEnterpriseAdminDetail = createServerFn({ method: "GET" })
     const [{ data: firm, error }, { data: modules }, { data: grades }, { data: members }, { data: permissions }] = await Promise.all([
       context.supabase
         .from("firms")
-        .select("id, number, name, address, manager, logo_url, status, brand_primary_color, brand_secondary_color, brand_accent_color, visual_identity, settings")
+        .select(
+          "id, number, name, address, manager, logo_url, status, brand_primary_color, brand_secondary_color, brand_accent_color, visual_identity, settings",
+        )
         .eq("id", data.firm_id)
         .maybeSingle(),
       context.supabase
@@ -294,9 +305,7 @@ export const getEnterpriseAdminDetail = createServerFn({ method: "GET" })
 
     const memberEffectiveAccess = (members ?? []).map((member: any) => {
       const assignedGradeIds = gradeIdsByMembership.get(member.id) ?? [];
-      const assignedGrades = assignedGradeIds
-        .map((id) => gradeById.get(id))
-        .filter(Boolean);
+      const assignedGrades = assignedGradeIds.map((id) => gradeById.get(id)).filter(Boolean);
 
       const effectiveModuleSet = new Set<string>();
       const effectivePermissionSet = new Set<string>();
@@ -376,15 +385,45 @@ export const updateEnterpriseSettings = createServerFn({ method: "POST" })
       firm_id: z.string().uuid().parse(d.firm_id),
       name: z.string().trim().min(2).max(120).parse(d.name),
       number: z.string().trim().min(2).max(30).parse(d.number),
-      status: z.enum(["active", "suspended", "revoked"]).default("active").parse(d.status ?? "active"),
-      address: z.string().trim().max(200).nullable().optional().parse(d.address ?? null),
-      manager: z.string().trim().max(120).nullable().optional().parse(d.manager ?? null),
-      logo_url: z.string().trim().url().max(500).nullable().optional().parse(d.logo_url ?? null),
+      status: z
+        .enum(["active", "suspended", "revoked"])
+        .default("active")
+        .parse(d.status ?? "active"),
+      address: z
+        .string()
+        .trim()
+        .max(200)
+        .nullable()
+        .optional()
+        .parse(d.address ?? null),
+      manager: z
+        .string()
+        .trim()
+        .max(120)
+        .nullable()
+        .optional()
+        .parse(d.manager ?? null),
+      logo_url: z
+        .string()
+        .trim()
+        .url()
+        .max(500)
+        .nullable()
+        .optional()
+        .parse(d.logo_url ?? null),
       brand_primary_color: colorSchema.parse(d.brand_primary_color ?? null),
       brand_secondary_color: colorSchema.parse(d.brand_secondary_color ?? null),
       brand_accent_color: colorSchema.parse(d.brand_accent_color ?? null),
-      visual_identity: z.record(z.any()).nullable().optional().parse(d.visual_identity ?? {}),
-      settings: z.record(z.any()).nullable().optional().parse(d.settings ?? {}),
+      visual_identity: z
+        .record(z.any())
+        .nullable()
+        .optional()
+        .parse(d.visual_identity ?? {}),
+      settings: z
+        .record(z.any())
+        .nullable()
+        .optional()
+        .parse(d.settings ?? {}),
     }),
   )
   .handler(async ({ data, context }) => {
@@ -420,24 +459,19 @@ export const updateEnterpriseModules = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertEnterpriseManager(context, data.firm_id);
 
-    const { data: catalog, error } = await context.supabase
-      .from("enterprise_module_catalog")
-      .select("slug")
-      .eq("is_active", true);
+    const { data: catalog, error } = await context.supabase.from("enterprise_module_catalog").select("slug").eq("is_active", true);
     if (error) throw new Error(error.message);
 
     const enabledSet = new Set(data.enabled_module_slugs);
     for (const module of catalog ?? []) {
-      const { error: uErr } = await context.supabase
-        .from("enterprise_modules")
-        .upsert(
-          {
-            firm_id: data.firm_id,
-            module_slug: module.slug,
-            enabled: enabledSet.has(module.slug),
-          },
-          { onConflict: "firm_id,module_slug" },
-        );
+      const { error: uErr } = await context.supabase.from("enterprise_modules").upsert(
+        {
+          firm_id: data.firm_id,
+          module_slug: module.slug,
+          enabled: enabledSet.has(module.slug),
+        },
+        { onConflict: "firm_id,module_slug" },
+      );
       if (uErr) throw new Error(uErr.message);
     }
 
@@ -449,9 +483,21 @@ export const upsertEnterpriseGrade = createServerFn({ method: "POST" })
   .inputValidator((d: { id?: string; firm_id: string; code: string; name: string; description?: string | null }) => ({
     id: z.string().uuid().optional().parse(d.id),
     firm_id: z.string().uuid().parse(d.firm_id),
-    code: z.string().trim().min(2).max(50).regex(/^[a-z0-9_\-]+$/i).parse(d.code),
+    code: z
+      .string()
+      .trim()
+      .min(2)
+      .max(50)
+      .regex(/^[a-z0-9_\-]+$/i)
+      .parse(d.code),
     name: z.string().trim().min(2).max(80).parse(d.name),
-    description: z.string().trim().max(500).nullable().optional().parse(d.description ?? null),
+    description: z
+      .string()
+      .trim()
+      .max(500)
+      .nullable()
+      .optional()
+      .parse(d.description ?? null),
   }))
   .handler(async ({ data, context }) => {
     await assertEnterpriseManager(context, data.firm_id);
@@ -491,12 +537,7 @@ export const deleteEnterpriseGrade = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data, context }) => {
     await assertEnterpriseManager(context, data.firm_id);
-    const { error } = await context.supabase
-      .from("enterprise_grades")
-      .delete()
-      .eq("id", data.id)
-      .eq("firm_id", data.firm_id)
-      .eq("is_system", false);
+    const { error } = await context.supabase.from("enterprise_grades").delete().eq("id", data.id).eq("firm_id", data.firm_id).eq("is_system", false);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -511,24 +552,19 @@ export const setEnterpriseGradeModules = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertEnterpriseManager(context, data.firm_id);
 
-    const { data: catalog, error } = await context.supabase
-      .from("enterprise_module_catalog")
-      .select("slug")
-      .eq("is_active", true);
+    const { data: catalog, error } = await context.supabase.from("enterprise_module_catalog").select("slug").eq("is_active", true);
     if (error) throw new Error(error.message);
 
     const allowed = new Set(data.allowed_module_slugs);
     for (const module of catalog ?? []) {
-      const { error: uErr } = await context.supabase
-        .from("enterprise_grade_modules")
-        .upsert(
-          {
-            grade_id: data.grade_id,
-            module_slug: module.slug,
-            allowed: allowed.has(module.slug),
-          },
-          { onConflict: "grade_id,module_slug" },
-        );
+      const { error: uErr } = await context.supabase.from("enterprise_grade_modules").upsert(
+        {
+          grade_id: data.grade_id,
+          module_slug: module.slug,
+          allowed: allowed.has(module.slug),
+        },
+        { onConflict: "grade_id,module_slug" },
+      );
       if (uErr) throw new Error(uErr.message);
     }
 
@@ -545,10 +581,7 @@ export const setEnterpriseGradePermissions = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertEnterpriseManager(context, data.firm_id);
 
-    const { error: delErr } = await context.supabase
-      .from("enterprise_grade_permissions")
-      .delete()
-      .eq("grade_id", data.grade_id);
+    const { error: delErr } = await context.supabase.from("enterprise_grade_permissions").delete().eq("grade_id", data.grade_id);
     if (delErr) throw new Error(delErr.message);
 
     if (data.permission_keys.length > 0) {
@@ -569,8 +602,14 @@ export const upsertEnterpriseMembership = createServerFn({ method: "POST" })
   .inputValidator((d: { firm_id: string; user_id: string; status?: "active" | "suspended"; is_default?: boolean }) => ({
     firm_id: z.string().uuid().parse(d.firm_id),
     user_id: z.string().uuid().parse(d.user_id),
-    status: z.enum(["active", "suspended"]).default("active").parse(d.status ?? "active"),
-    is_default: z.boolean().default(false).parse(d.is_default ?? false),
+    status: z
+      .enum(["active", "suspended"])
+      .default("active")
+      .parse(d.status ?? "active"),
+    is_default: z
+      .boolean()
+      .default(false)
+      .parse(d.is_default ?? false),
   }))
   .handler(async ({ data, context }) => {
     await assertEnterpriseManager(context, data.firm_id);
@@ -604,15 +643,15 @@ export const setEnterpriseMemberGrades = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertEnterpriseManager(context, data.firm_id);
 
-    const { error: delErr } = await context.supabase
-      .from("enterprise_member_grades")
-      .delete()
-      .eq("membership_id", data.membership_id);
+    const { error: delErr } = await context.supabase.from("enterprise_member_grades").delete().eq("membership_id", data.membership_id);
     if (delErr) throw new Error(delErr.message);
 
     if (data.grade_ids.length > 0) {
       const { error } = await context.supabase.from("enterprise_member_grades").insert(
-        data.grade_ids.map((gradeId) => ({ membership_id: data.membership_id, grade_id: gradeId })),
+        data.grade_ids.map((gradeId) => ({
+          membership_id: data.membership_id,
+          grade_id: gradeId,
+        })),
       );
       if (error) throw new Error(error.message);
     }
@@ -629,11 +668,7 @@ export const removeEnterpriseMembership = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertEnterpriseManager(context, data.firm_id);
 
-    const { error } = await context.supabase
-      .from("enterprise_memberships")
-      .delete()
-      .eq("id", data.membership_id)
-      .eq("firm_id", data.firm_id);
+    const { error } = await context.supabase.from("enterprise_memberships").delete().eq("id", data.membership_id).eq("firm_id", data.firm_id);
 
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -641,7 +676,15 @@ export const removeEnterpriseMembership = createServerFn({ method: "POST" })
 
 export const listUserLookup = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { q?: string | null }) => ({ q: z.string().trim().max(80).nullable().optional().parse(d.q ?? null) }))
+  .inputValidator((d: { q?: string | null }) => ({
+    q: z
+      .string()
+      .trim()
+      .max(80)
+      .nullable()
+      .optional()
+      .parse(d.q ?? null),
+  }))
   .handler(async ({ data, context }) => {
     if (!(await isBatonnier(context))) {
       throw new Error("Acces reserve a l'administration corporate.");
@@ -659,7 +702,12 @@ export const listUserLookup = createServerFn({ method: "GET" })
       }))
       .filter((row: any) => {
         if (!q) return true;
-        return row.email.toLowerCase().includes(q) || String(row.full_name ?? "").toLowerCase().includes(q);
+        return (
+          row.email.toLowerCase().includes(q) ||
+          String(row.full_name ?? "")
+            .toLowerCase()
+            .includes(q)
+        );
       })
       .slice(0, 100);
   });
@@ -681,10 +729,7 @@ export const setMyActiveEnterprise = createServerFn({ method: "POST" })
       throw new Error("Vous n'avez pas acces a cette entreprise.");
     }
 
-    const { error: pErr } = await context.supabase
-      .from("profiles")
-      .update({ active_firm_id: data.firm_id })
-      .eq("id", context.userId);
+    const { error: pErr } = await context.supabase.from("profiles").update({ active_firm_id: data.firm_id }).eq("id", context.userId);
 
     if (pErr) throw new Error(pErr.message);
     return { ok: true, firm_id: data.firm_id };
@@ -693,6 +738,7 @@ export const setMyActiveEnterprise = createServerFn({ method: "POST" })
 export const getMyEnterpriseContext = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const isCorporateAdmin = await isBatonnier(context);
     const [{ data: memberships, error }, { data: allModules }, { data: routes }] = await Promise.all([
       context.supabase
         .from("enterprise_memberships")
@@ -704,50 +750,49 @@ export const getMyEnterpriseContext = createServerFn({ method: "GET" })
         .select("slug, label, route_path, nav_group, icon_name, sort_order, is_active")
         .eq("is_active", true)
         .order("sort_order", { ascending: true }),
-      context.supabase
-        .from("enterprise_module_targets")
-        .select("module_slug, target_kind, target_name")
-        .eq("target_kind", "route"),
+      context.supabase.from("enterprise_module_targets").select("module_slug, target_kind, target_name").eq("target_kind", "route"),
     ]);
 
     if (error) throw new Error(error.message);
 
     const membershipIds = (memberships ?? []).map((m: any) => m.id);
-    const firmIds = (memberships ?? []).map((m: any) => m.firm_id);
+    let adminFirms: any[] = [];
+    if (isCorporateAdmin) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data, error: firmsError } = await supabaseAdmin
+        .from("firms")
+        .select("id, number, name, logo_url")
+        .eq("status", "active")
+        .order("name", { ascending: true });
+      if (firmsError) throw new Error(firmsError.message);
+      adminFirms = data ?? [];
+    }
+    const firmIds = isCorporateAdmin ? adminFirms.map((firm: any) => firm.id) : (memberships ?? []).map((membership: any) => membership.firm_id);
 
     const [{ data: memberGrades }, { data: grades }, { data: gradeModules }, { data: enterpriseModules }, { data: profile }] = await Promise.all([
       membershipIds.length > 0
-        ? context.supabase
-            .from("enterprise_member_grades")
-            .select("membership_id, grade_id")
-            .in("membership_id", membershipIds)
+        ? context.supabase.from("enterprise_member_grades").select("membership_id, grade_id").in("membership_id", membershipIds)
         : Promise.resolve({ data: [] as any[] }),
       firmIds.length > 0
-        ? context.supabase
-            .from("enterprise_grades")
-            .select("id, firm_id, name")
-            .in("firm_id", firmIds)
+        ? context.supabase.from("enterprise_grades").select("id, firm_id, name").in("firm_id", firmIds)
         : Promise.resolve({ data: [] as any[] }),
       firmIds.length > 0
         ? context.supabase
             .from("enterprise_grade_modules")
             .select("grade_id, module_slug, allowed")
-            .in("grade_id", (membershipIds.length > 0 ? (await context.supabase.from("enterprise_member_grades").select("grade_id").in("membership_id", membershipIds)).data ?? [] : []).map((r: any) => r.grade_id))
+            .in(
+              "grade_id",
+              (membershipIds.length > 0
+                ? ((await context.supabase.from("enterprise_member_grades").select("grade_id").in("membership_id", membershipIds)).data ?? [])
+                : []
+              ).map((r: any) => r.grade_id),
+            )
         : Promise.resolve({ data: [] as any[] }),
       firmIds.length > 0
-        ? context.supabase
-            .from("enterprise_modules")
-            .select("firm_id, module_slug, enabled")
-            .in("firm_id", firmIds)
+        ? context.supabase.from("enterprise_modules").select("firm_id, module_slug, enabled").in("firm_id", firmIds)
         : Promise.resolve({ data: [] as any[] }),
-      context.supabase
-        .from("profiles")
-        .select("active_firm_id")
-        .eq("id", context.userId)
-        .maybeSingle(),
+      context.supabase.from("profiles").select("active_firm_id").eq("id", context.userId).maybeSingle(),
     ]);
-
-    const isCorporateAdmin = await isBatonnier(context);
 
     const gradeById = new Map<string, any>();
     for (const grade of grades ?? []) gradeById.set(grade.id, grade);
@@ -794,26 +839,34 @@ export const getMyEnterpriseContext = createServerFn({ method: "GET" })
       allowedModuleByMembership.set(membership.id, allowed);
     }
 
-    const enterpriseRows = (memberships ?? []).map((membership: any) => {
-      const enabled = modulesEnabledByFirm.get(membership.firm_id) ?? new Set<string>();
-      const allowed = allowedModuleByMembership.get(membership.id) ?? new Set<string>();
-      const modules = Array.from(enabled).filter((slug) => isCorporateAdmin || allowed.has(slug));
-      return {
-        membership_id: membership.id as string,
-        firm_id: membership.firm_id as string,
-        number: membership.firms?.number ?? "",
-        name: membership.firms?.name ?? "Entreprise",
-        logo_url: membership.firms?.logo_url ?? null,
-        grade_names: gradesByMembership.get(membership.id) ?? [],
-        modules,
-      };
-    });
+    const enterpriseRows = isCorporateAdmin
+      ? adminFirms.map((firm: any) => ({
+          membership_id: null,
+          firm_id: firm.id as string,
+          number: firm.number ?? "",
+          name: firm.name ?? "Entreprise",
+          logo_url: firm.logo_url ?? null,
+          grade_names: ["Administration corporate"],
+          modules: Array.from(modulesEnabledByFirm.get(firm.id) ?? new Set<string>()),
+        }))
+      : (memberships ?? []).map((membership: any) => {
+          const enabled = modulesEnabledByFirm.get(membership.firm_id) ?? new Set<string>();
+          const allowed = allowedModuleByMembership.get(membership.id) ?? new Set<string>();
+          const modules = Array.from(enabled).filter((slug) => allowed.has(slug));
+          return {
+            membership_id: membership.id as string,
+            firm_id: membership.firm_id as string,
+            number: membership.firms?.number ?? "",
+            name: membership.firms?.name ?? "Entreprise",
+            logo_url: membership.firms?.logo_url ?? null,
+            grade_names: gradesByMembership.get(membership.id) ?? [],
+            modules,
+          };
+        });
 
     const firstEnterprise = enterpriseRows[0] ?? null;
     const preferredFirmId = profile?.active_firm_id as string | null;
-    const activeEnterprise =
-      enterpriseRows.find((row: any) => row.firm_id === preferredFirmId) ??
-      firstEnterprise;
+    const activeEnterprise = enterpriseRows.find((row: any) => row.firm_id === preferredFirmId) ?? firstEnterprise;
 
     const moduleCatalog = (allModules ?? []).map((m: any) => ({
       slug: m.slug,
@@ -842,7 +895,10 @@ export const getMyEnterpriseContext = createServerFn({ method: "GET" })
       active_modules: activeEnterprise?.modules ?? [],
       nav_modules: navModules,
       all_modules: moduleCatalog,
-      known_route_targets: Array.from(allRouteByModule.entries()).map(([module_slug, paths]) => ({ module_slug, paths })),
+      known_route_targets: Array.from(allRouteByModule.entries()).map(([module_slug, paths]) => ({
+        module_slug,
+        paths,
+      })),
       is_corporate_admin: isCorporateAdmin,
     };
   });

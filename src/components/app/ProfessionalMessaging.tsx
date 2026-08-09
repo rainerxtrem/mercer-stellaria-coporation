@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Building2, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, Building2, MessageCircle, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -9,15 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/lib/auth";
 import { useEnterpriseWorkspace } from "@/hooks/use-enterprise-workspace";
+import { listMatterMessages, sendMatterMessage } from "@/lib/matter-messages.functions";
 import {
   listProfessionalGeneralMessages,
   listProfessionalMessagingThreads,
   markProfessionalConversationRead,
   sendProfessionalGeneralMessage,
 } from "@/lib/professional-messaging.functions";
-import { isAccessRelatedMessagingError } from "@/lib/professional-messaging.utils";
 
 type Thread = {
+  kind: "general" | "matter";
   id: string;
   title: string;
   subtitle: string;
@@ -32,33 +33,28 @@ export function ProfessionalMessaging() {
   const endRef = useRef<HTMLDivElement>(null);
   const threadsFn = useServerFn(listProfessionalMessagingThreads);
   const generalMessagesFn = useServerFn(listProfessionalGeneralMessages);
+  const matterMessagesFn = useServerFn(listMatterMessages);
   const sendGeneralFn = useServerFn(sendProfessionalGeneralMessage);
+  const sendMatterFn = useServerFn(sendMatterMessage);
   const markReadFn = useServerFn(markProfessionalConversationRead);
 
   const threadsQ = useQuery({
     queryKey: ["professional-messaging", activeFirmId, "threads"],
     enabled: Boolean(activeFirmId) && !enterpriseLoading,
-    queryFn: async () => {
-      try {
-        return await threadsFn();
-      } catch (error) {
-        if (isAccessRelatedMessagingError(error)) {
-          return { user_id: session?.user?.id ?? null, general: [], matters: [] };
-        }
-        throw error;
-      }
-    },
+    queryFn: () => threadsFn(),
     refetchInterval: 4000,
   });
 
   const threads = useMemo<Thread[]>(() => {
-    const rows = Array.isArray(threadsQ.data?.general) ? threadsQ.data.general : [];
-    return rows.map((conversation: any) => {
+    const generalRows = Array.isArray(threadsQ.data?.general) ? threadsQ.data.general : [];
+    const matterRows = Array.isArray(threadsQ.data?.matters) ? threadsQ.data.matters : [];
+    const general = generalRows.map((conversation: any) => {
       const clientName = [conversation.clients?.last_name, conversation.clients?.first_name]
         .filter(Boolean)
         .join(" ");
       const latest = conversation.latest_message;
       return {
+        kind: "general" as const,
         id: conversation.id,
         title: clientName || "Client",
         subtitle: conversation.subject || "Conversation générale",
@@ -70,37 +66,60 @@ export function ProfessionalMessaging() {
         ),
       };
     });
+    const matters = matterRows.map((matter: any) => ({
+      kind: "matter" as const,
+      id: matter.id,
+      title:
+        [matter.clients?.last_name, matter.clients?.first_name].filter(Boolean).join(" ") ||
+        matter.title,
+      subtitle: `${matter.number || "Dossier"} · ${matter.title}`,
+      latest: matter.latest_message,
+      unread: false,
+    }));
+    return [...general, ...matters].sort((left, right) =>
+      String(right.latest?.created_at ?? "").localeCompare(String(left.latest?.created_at ?? "")),
+    );
   }, [threadsQ.data]);
 
   const [selectedKey, setSelectedKey] = useState("");
   const [body, setBody] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   useEffect(() => {
-    if (!selectedKey && threads[0]) setSelectedKey(threads[0].id);
+    if (threads.length === 0) {
+      if (selectedKey) setSelectedKey("");
+      return;
+    }
+    if (!threads.some((thread) => `${thread.kind}:${thread.id}` === selectedKey)) {
+      setSelectedKey(`${threads[0].kind}:${threads[0].id}`);
+    }
   }, [selectedKey, threads]);
-  const selected = threads.find((thread) => thread.id === selectedKey) ?? null;
-  const selectedGeneralId = selected?.id ?? null;
+  const selected = threads.find((thread) => `${thread.kind}:${thread.id}` === selectedKey) ?? null;
+  const selectedGeneralId = selected?.kind === "general" ? selected.id : null;
+  const selectedMatterId = selected?.kind === "matter" ? selected.id : null;
 
   const generalQ = useQuery({
     queryKey: ["professional-messaging", activeFirmId, "general", selectedGeneralId],
     enabled: Boolean(selectedGeneralId),
-    queryFn: async () => {
-      if (!selectedGeneralId) return [];
-      try {
-        return await generalMessagesFn({ data: { conversation_id: selectedGeneralId } });
-      } catch (error) {
-        if (isAccessRelatedMessagingError(error)) {
-          return [];
-        }
-        throw error;
-      }
-    },
+    queryFn: () =>
+      selectedGeneralId
+        ? generalMessagesFn({ data: { conversation_id: selectedGeneralId } })
+        : Promise.resolve([]),
+    refetchInterval: 2500,
+  });
+  const matterQ = useQuery({
+    queryKey: ["professional-messaging", activeFirmId, "matter", selectedMatterId],
+    enabled: Boolean(selectedMatterId),
+    queryFn: () =>
+      selectedMatterId
+        ? matterMessagesFn({ data: { matter_id: selectedMatterId } })
+        : Promise.resolve([]),
     refetchInterval: 2500,
   });
 
   const messages = useMemo(() => {
-    return Array.isArray(generalQ.data) ? generalQ.data : [];
-  }, [generalQ.data]);
+    const selectedMessages = selected?.kind === "general" ? generalQ.data : matterQ.data;
+    return Array.isArray(selectedMessages) ? selectedMessages : [];
+  }, [generalQ.data, matterQ.data, selected?.kind]);
 
   useEffect(() => {
     if (!selectedGeneralId) return;
@@ -119,7 +138,13 @@ export function ProfessionalMessaging() {
   const send = useMutation({
     mutationFn: async () => {
       if (!selected || !body.trim()) return;
-      await sendGeneralFn({ data: { conversation_id: selected.id, body: body.trim() } });
+      if (selected.kind === "general") {
+        await sendGeneralFn({ data: { conversation_id: selected.id, body: body.trim() } });
+      } else {
+        await sendMatterFn({
+          data: { matter_id: selected.id, body: body.trim(), internal: false },
+        });
+      }
     },
     onSuccess: async () => {
       setBody("");
@@ -129,7 +154,7 @@ export function ProfessionalMessaging() {
   });
 
   function selectThread(thread: Thread) {
-    setSelectedKey(thread.id);
+    setSelectedKey(`${thread.kind}:${thread.id}`);
     setMobileOpen(true);
     setBody("");
   }
@@ -149,25 +174,39 @@ export function ProfessionalMessaging() {
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {threadsQ.isLoading && (
-              <p className="px-5 py-12 text-center text-sm text-muted-foreground">Chargement des conversations...</p>
+              <p className="px-5 py-12 text-center text-sm text-muted-foreground">
+                Chargement des conversations...
+              </p>
             )}
             {threadsQ.isError && (
               <div className="mx-3 my-6 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-center">
-                <p className="text-sm text-destructive">Les conversations clients n'ont pas pu être chargées.</p>
-                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => threadsQ.refetch()}>
+                <p className="text-sm text-destructive">
+                  Les conversations clients n'ont pas pu être chargées.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => threadsQ.refetch()}
+                >
                   Réessayer
                 </Button>
               </div>
             )}
             {threads.map((thread) => (
               <button
-                key={thread.id}
+                key={`${thread.kind}:${thread.id}`}
                 type="button"
                 onClick={() => selectThread(thread)}
-                className={`mb-1 flex w-full items-center gap-3 rounded-md p-3 text-left transition ${selectedKey === thread.id ? "bg-secondary" : "hover:bg-secondary/60"}`}
+                className={`mb-1 flex w-full items-center gap-3 rounded-md p-3 text-left transition ${selectedKey === `${thread.kind}:${thread.id}` ? "bg-secondary" : "hover:bg-secondary/60"}`}
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-background text-navy">
-                  <Building2 className="h-4 w-4" />
+                  {thread.kind === "general" ? (
+                    <Building2 className="h-4 w-4" />
+                  ) : (
+                    <BriefcaseBusiness className="h-4 w-4" />
+                  )}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
@@ -210,8 +249,10 @@ export function ProfessionalMessaging() {
                 </div>
               </header>
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-muted/10 px-4 py-6 sm:px-8">
-                {generalQ.isError && (
-                  <p className="py-8 text-center text-sm text-destructive">Impossible de charger les messages de cette conversation.</p>
+                {(generalQ.isError || matterQ.isError) && (
+                  <p className="py-8 text-center text-sm text-destructive">
+                    Impossible de charger les messages de cette conversation.
+                  </p>
                 )}
                 {messages.map((message: any) => {
                   const mine = message.author_id === session?.user.id;

@@ -216,6 +216,26 @@ export function createAuthClient() {
       return result;
     },
 
+    async signUp(credentials: {
+      email: string;
+      password: string;
+      options?: { data?: { full_name?: string } };
+    }) {
+      const result = await toResult(
+        post<{ session: Session; user: AuthUser }>("/api/auth/signup", {
+          email: credentials.email,
+          password: credentials.password,
+          full_name: credentials.options?.data?.full_name ?? "",
+        }),
+        { session: null as Session | null, user: null as AuthUser | null },
+      );
+      if (result.data.session) {
+        persist(result.data.session);
+        emit("SIGNED_IN");
+      }
+      return result;
+    },
+
     async signOut() {
       const refreshToken = session?.refresh_token ?? null;
       persist(null);

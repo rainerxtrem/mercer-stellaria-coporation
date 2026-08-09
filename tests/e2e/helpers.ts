@@ -12,9 +12,7 @@ export async function signUp(page: Page, user = randomUser()) {
   await page.getByLabel(/adresse e-mail/i).fill(user.email);
   await page.getByLabel(/mot de passe/i).fill(user.password);
   await page.getByRole("button", { name: /créer mon compte/i }).click();
-  // Signup handler shows toast then stays on /auth. Immediately sign in.
-  await expectToast(page, /compte créé|bienvenue/i);
-  await signIn(page, user.email, user.password);
+  await page.waitForURL((url) => !url.pathname.startsWith("/auth"), { timeout: 15_000 });
   return user;
 }
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import seal from "@/assets/seal.png";
 import { Loader2, ShieldCheck, MessageSquareShare } from "lucide-react";
@@ -46,6 +47,7 @@ async function resolveAuthRedirectTarget(userId: string) {
 function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -89,6 +91,28 @@ function AuthPage() {
     navigate({ to: target, replace: true });
   }
 
+  async function handleSignup(e: React.FormEvent) {
+    e.preventDefault();
+    const value = email.trim();
+    if (!fullName.trim() || !value || !password) {
+      toast.error("Veuillez renseigner votre nom, votre adresse e-mail et votre mot de passe.");
+      return;
+    }
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email: value,
+      password,
+      options: { data: { full_name: fullName.trim() } },
+    });
+    setLoading(false);
+    if (error) return toast.error(getAuthErrorMessage(error.message));
+    toast.success("Compte local créé.");
+    const target = data.user
+      ? await resolveAuthRedirectTarget(data.user.id)
+      : DEFAULT_AUTH_REDIRECT_TARGET;
+    navigate({ to: target, replace: true });
+  }
+
   return (
     <div className="min-h-[calc(100vh-5rem)] bg-secondary/40 py-16">
       <div className="container-page max-w-md">
@@ -101,27 +125,58 @@ function AuthPage() {
         </div>
         <Card className="shadow-[var(--shadow-card)]">
           <CardContent className="p-6">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email-login">Adresse e-mail</Label>
-                <Input id="email-login" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pwd-login">Mot de passe</Label>
-                <Input id="pwd-login" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
-              <button
-                type="button"
-                onClick={handlePasswordResetRequest}
-                disabled={loading}
-                className="text-left text-xs font-medium text-navy hover:text-navy-deep"
-              >
-                Définir ou réinitialiser mon mot de passe
-              </button>
-              <Button type="submit" disabled={loading} className="w-full bg-navy text-white hover:bg-navy-deep">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Se connecter"}
-              </Button>
-            </form>
+            <Tabs defaultValue="login">
+              {import.meta.env.DEV && (
+                <TabsList className="mb-5 grid w-full grid-cols-2">
+                  <TabsTrigger value="login">Connexion</TabsTrigger>
+                  <TabsTrigger value="signup">Inscription</TabsTrigger>
+                </TabsList>
+              )}
+              <TabsContent value="login">
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email-login">Adresse e-mail</Label>
+                    <Input id="email-login" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pwd-login">Mot de passe</Label>
+                    <Input id="pwd-login" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePasswordResetRequest}
+                    disabled={loading}
+                    className="text-left text-xs font-medium text-navy hover:text-navy-deep"
+                  >
+                    Définir ou réinitialiser mon mot de passe
+                  </button>
+                  <Button type="submit" disabled={loading} className="w-full bg-navy text-white hover:bg-navy-deep">
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Se connecter"}
+                  </Button>
+                </form>
+              </TabsContent>
+              {import.meta.env.DEV && (
+                <TabsContent value="signup">
+                  <form onSubmit={handleSignup} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name-signup">Nom complet</Label>
+                      <Input id="name-signup" autoComplete="name" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email-signup">Adresse e-mail</Label>
+                      <Input id="email-signup" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="pwd-signup">Mot de passe</Label>
+                      <Input id="pwd-signup" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
+                    </div>
+                    <Button type="submit" disabled={loading} className="w-full bg-navy text-white hover:bg-navy-deep">
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Créer mon compte"}
+                    </Button>
+                  </form>
+                </TabsContent>
+              )}
+            </Tabs>
 
             <div className="mt-6 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
               <p className="flex items-start gap-2">
