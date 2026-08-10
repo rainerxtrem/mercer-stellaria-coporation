@@ -19,6 +19,7 @@ import {
   Plus, Search, Sparkles, Trash2, Upload,
 } from "lucide-react";
 import { TemplateFieldsDialog } from "@/components/app/TemplateFieldsDialog";
+import { TemplateGenerateDialog } from "@/components/app/TemplateGenerateDialog";
 import {
   getTemplateAccess, listTemplateCategories, upsertTemplateCategory, deleteTemplateCategory,
   listTemplates, getTemplate, createTemplateUploadUrl, createTemplate, updateTemplate,
@@ -34,6 +35,13 @@ export const Route = createFileRoute("/_authenticated/cabinet/modeles")({
       { property: "og:description", content: "Gérez la bibliothèque de modèles juridiques de votre cabinet." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+    ],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&family=Great+Vibes&family=Caveat:wght@600&display=swap",
+      },
     ],
   }),
   component: Page,
@@ -97,6 +105,7 @@ function Page() {
 
   const [versionsFor, setVersionsFor] = useState<Tpl | null>(null);
   const [fieldsFor, setFieldsFor] = useState<Tpl | null>(null);
+  const [generateFor, setGenerateFor] = useState<Tpl | null>(null);
   const versions = useQuery({
     queryKey: ["tpl-versions", versionsFor?.id],
     queryFn: () => getFn({ data: { id: versionsFor!.id } }),
@@ -315,6 +324,9 @@ function Page() {
                     {t.description && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{t.description}</p>}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" className="bg-navy text-white" onClick={() => setGenerateFor(t)}>
+                      <Sparkles className="mr-2 h-4 w-4" /> Generer
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => download(t.id)}>
                       <Download className="mr-2 h-4 w-4" /> Fichier
                     </Button>
@@ -493,6 +505,12 @@ function Page() {
         templateName={fieldsFor?.name}
         canManage={canManage}
         onOpenChange={(o) => { if (!o) setFieldsFor(null); refresh(); }}
+      />
+
+      <TemplateGenerateDialog
+        templateId={generateFor?.id ?? null}
+        templateName={generateFor?.name}
+        onOpenChange={(o) => { if (!o) setGenerateFor(null); refresh(); }}
       />
     </>
 

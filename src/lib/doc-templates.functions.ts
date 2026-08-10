@@ -582,3 +582,324 @@ export const saveTemplateFields = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true, count: data.fields.length };
   });
+
+// ---------------- LOT 3 : GÉNÉRATION / APERÇU / ENREGISTREMENT ----------------
+
+const placementSchema = z.object({
+  page: z.number().int().min(1).max(50),
+  x: z.number().min(0).max(2000),
+  y: z.number().min(0).max(2000),
+  width: z.number().min(30).max(500),
+  height: z.number().min(15).max(300),
+});
+
+const generationInputSchema = z.object({
+  template_id: z.string().uuid().optional(),
+  version_id: z.string().uuid().optional(),
+  values: z.record(z.string().max(80), z.string().max(4000).nullable()).default({}),
+  signature: z.object({
+    first_name: z.string().trim().min(1).max(80),
+    last_name: z.string().trim().min(1).max(80),
+    method: z.enum(["drawn", "generated"]),
+    style: z.string().trim().max(40).nullable().optional(),
+    image_base64: z.string().min(100).max(4_000_000),
+    placements: z.array(placementSchema).min(1).max(10),
+  }).nullable().optional(),
+});
+
+async function ensureVersionText(context: any, version: any): Promise<string> {
+  const existing = typeof version.body_text === "string" ? version.body_text.trim() : "";
+  if (existing) return existing;
+  const { data: blob, error: dlErr } = await context.supabase.storage.from(BUCKET).download(version.storage_path);
+  if (dlErr || !blob) throw new Error(dlErr?.message ?? "Fichier du modèle illisible.");
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const { extractDocument, sanitizeUnicode } = await import("@/lib/doc-template-analysis.server");
+  const doc = extractDocument(bytes, version.mime_type as string, version.file_name as string);
+  return sanitizeUnicode(doc.text ?? "").slice(0, 200_000);
+}
+
+function escapeRe(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeValue(raw: unknown): string {
+  return String(raw ?? "").replace(/\r\n/g, "\n").replace(/\u0000/g, "").trim();
+}
+
+function fillTemplateText(base: string, fields: any[], values: Record<string, string | null>) {
+  let out = base;
+  const used = new Set<string>();
+
+  for (const f of fields) {
+    const key = String(f?.key ?? "").trim();
+    if (!key || used.has(key)) continue;
+    used.add(key);
+    const token = String(f?.token ?? "").trim();
+    const val = normalizeValue(values[key] ?? f?.default_value ?? "");
+    if (!token) continue;
+    out = out.replace(new RegExp(escapeRe(token), "g"), val || "");
+  }
+
+  const unresolved = out.match(/\{\{\s*[^{}]{1,120}\s*\}\}|\[\[\s*[^\[\]]{1,120}\s*\]\]/g) ?? [];
+  if (unresolved.length > 0) {
+    out += "\n\n---\nChamps restant à compléter:\n";
+    for (const token of Array.from(new Set(unresolved)).slice(0, 100)) out += `- ${token}\n`;
+  }
+
+  return out.trim();
+}
+
+async function buildGeneratedPdf(input: {
+  title: string;
+  content: string;
+  metadataLines: string[];
+  signature?: {
+    first_name: string;
+    last_name: string;
+    method: "drawn" | "generated";
+    style?: string | null;
+    image_base64: string;
+    placements: Array<{ page: number; x: number; y: number; width: number; height: number }>;
+  } | null;
+}) {
+  const { PDF_COLORS, SimplePdfDocument, wrapText } = await import("@/lib/pdf/simple-pdf");
+  const { base64ToBytes } = await import("@/lib/signature-utils");
+
+  const PAGE_W = 595.28;
+  const PAGE_H = 841.89;
+  const left = 52;
+  const right = 543;
+
+  const doc = new SimplePdfDocument(PAGE_W, PAGE_H);
+  let y = 800;
+
+  const drawHeader = () => {
+    doc.text("Mercer & Stellaria Corporation", left, 816, { size: 9, font: "bold", color: PDF_COLORS.navy });
+    doc.text("Générateur documentaire", right, 816, { size: 8, color: PDF_COLORS.gray, align: "right" });
+    doc.text(input.title.slice(0, 96), left, 792, { size: 16, font: "bold", color: PDF_COLORS.navy });
+    doc.line(left, 782, right, 782, PDF_COLORS.border, 0.8);
+    y = 764;
+  };
+
+  const ensure = (required: number) => {
+    if (y > required) return;
+    doc.addPage(PAGE_W, PAGE_H);
+    drawHeader();
+  };
+
+  drawHeader();
+
+  for (const line of input.metadataLines) {
+    for (const wrapped of wrapText(line, right - left, 8, "regular")) {
+      ensure(100);
+      doc.text(wrapped, left, y, { size: 8, color: PDF_COLORS.gray });
+      y -= 11;
+    }
+  }
+
+  if (input.metadataLines.length) {
+    y -= 6;
+    doc.line(left, y, right, y, PDF_COLORS.border, 0.5);
+    y -= 14;
+  }
+
+  const paragraphs = input.content
+    .replace(/\t/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n")
+    .map((p) => p.trimEnd());
+
+  for (const para of paragraphs) {
+    if (!para.trim()) {
+      y -= 8;
+      continue;
+    }
+    const lines = wrapText(para, right - left, 10, "regular");
+    for (const ln of lines) {
+      ensure(100);
+      doc.text(ln, left, y, { size: 10, color: PDF_COLORS.navy });
+      y -= 14;
+    }
+    y -= 2;
+  }
+
+  if (input.signature) {
+    const jpeg = base64ToBytes(input.signature.image_base64);
+    const ref = doc.addJpeg(jpeg);
+    const signedAt = new Date().toISOString();
+    for (const p of input.signature.placements) {
+      const pageIndex = Math.max(0, Math.min((p.page || 1) - 1, doc.pageCount - 1));
+      doc.selectPage(pageIndex);
+      const w = Math.max(40, Math.min(p.width, PAGE_W));
+      const h = Math.max(20, Math.min(p.height, PAGE_H));
+      const x = Math.max(0, Math.min(p.x, PAGE_W - w));
+      const yBottom = Math.max(0, PAGE_H - p.y - h);
+      doc.drawImage(ref, x, yBottom, w, h);
+      doc.line(x, yBottom - 3, x + w, yBottom - 3, PDF_COLORS.border, 0.5);
+      doc.text(
+        `${input.signature.first_name} ${input.signature.last_name} — signé le ${formatDateTime(signedAt)}`,
+        x,
+        yBottom - 13,
+        { size: 6, color: PDF_COLORS.gray },
+      );
+    }
+  }
+
+  return doc.save();
+}
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} à ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
+}
+
+function toSafePdfName(raw: string) {
+  const stripped = raw.replace(/\.[a-zA-Z0-9]{1,5}$/, "");
+  const safe = stripped.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/_{2,}/g, "_").slice(0, 120);
+  return safe || "document_genere";
+}
+
+async function resolveMatterAndFolder(context: any, matterId: string, folderId: string | null, firmId: string) {
+  const { data: matter, error: mErr } = await context.supabase
+    .from("matters")
+    .select("id, number, title, firm_id")
+    .eq("id", matterId)
+    .eq("firm_id", firmId)
+    .maybeSingle();
+  if (mErr) throw new Error(mErr.message);
+  if (!matter) throw new Error("Dossier introuvable ou non accessible.");
+
+  if (folderId) {
+    const { data: folder, error: fErr } = await context.supabase
+      .from("matter_folders")
+      .select("id, matter_id")
+      .eq("id", folderId)
+      .maybeSingle();
+    if (fErr) throw new Error(fErr.message);
+    if (!folder || folder.matter_id !== matterId) {
+      throw new Error("Le dossier de destination n'appartient pas au dossier client sélectionné.");
+    }
+  }
+
+  return matter as { id: string; number: string | null; title: string | null; firm_id: string };
+}
+
+async function generateDocumentBytes(context: any, input: z.infer<typeof generationInputSchema>) {
+  const scope = await resolveScope(context);
+  if (!scope.targetFirmId) throw new Error("Aucun cabinet actif.");
+  const version = await resolveVersion(context, input);
+
+  const { data: tpl, error: tErr } = await context.supabase
+    .from("doc_templates")
+    .select("id, firm_id, name, current_version")
+    .eq("id", version.template_id)
+    .maybeSingle();
+  if (tErr) throw new Error(tErr.message);
+  if (!tpl) throw new Error("Modèle introuvable.");
+  if ((tpl as any).firm_id !== scope.targetFirmId) {
+    throw new Error("Ce modèle n'appartient pas à l'entreprise active.");
+  }
+
+  const fields = Array.isArray(version.fields) ? version.fields : [];
+  const text = await ensureVersionText(context, version);
+  const filled = fillTemplateText(text, fields, input.values ?? {});
+  const metadataLines = [
+    `Version ${version.version} · ${version.file_name}`,
+    `Généré le ${new Date().toLocaleString("fr-FR")}`,
+  ];
+  const bytes = await buildGeneratedPdf({
+    title: String((tpl as any).name ?? "Document"),
+    content: filled,
+    metadataLines,
+    signature: input.signature ?? null,
+  });
+
+  return {
+    bytes,
+    templateId: String((tpl as any).id),
+    templateName: String((tpl as any).name ?? "Document"),
+    version: Number(version.version ?? 1),
+  };
+}
+
+export const previewGeneratedTemplatePdf = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => generationInputSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const out = await generateDocumentBytes(context, data);
+    return {
+      filename: `${toSafePdfName(out.templateName)}-v${out.version}.pdf`,
+      base64: Buffer.from(out.bytes).toString("base64"),
+      size_bytes: out.bytes.length,
+      generated_at: new Date().toISOString(),
+    };
+  });
+
+export const saveGeneratedTemplatePdf = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    generation: generationInputSchema,
+    matter_id: z.string().uuid(),
+    folder_id: z.string().uuid().nullable().optional(),
+    filename: z.string().trim().min(1).max(180).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const scope = await resolveScope(context);
+    if (!scope.targetFirmId) throw new Error("Aucun cabinet actif.");
+    const matter = await resolveMatterAndFolder(context, data.matter_id, data.folder_id ?? null, scope.targetFirmId);
+    const out = await generateDocumentBytes(context, data.generation);
+
+    const docId = crypto.randomUUID();
+    const baseName = toSafePdfName(data.filename || `${out.templateName}-${matter.number || matter.title || "dossier"}`);
+    const filename = `${baseName}.pdf`;
+    const storagePath = `matters/${matter.id}/${docId}-${filename}`;
+
+    const { error: upErr } = await context.supabase.storage
+      .from("bar-media")
+      .upload(storagePath, out.bytes, { contentType: "application/pdf", upsert: true });
+    if (upErr) throw new Error(`Archivage impossible : ${upErr.message}`);
+
+    const { error: docErr } = await context.supabase
+      .from("matter_documents")
+      .insert({
+        id: docId,
+        matter_id: matter.id,
+        folder_id: data.folder_id ?? null,
+        filename,
+        storage_path: storagePath,
+        mime_type: "application/pdf",
+        size_bytes: out.bytes.length,
+        uploaded_by: context.userId,
+      });
+    if (docErr) throw new Error(docErr.message);
+
+    const { logMatterActivity } = await import("@/lib/activity-log");
+    await logMatterActivity(
+      context.supabase,
+      context.userId,
+      matter.id,
+      data.generation.signature ? "document_signed" : "document_generated",
+      data.generation.signature
+        ? `Document signé « ${filename} » généré depuis le modèle ${out.templateName}`
+        : `Document « ${filename} » généré depuis le modèle ${out.templateName}`,
+      {
+        entity_type: "document",
+        entity_id: docId,
+        metadata: {
+          template_id: out.templateId,
+          template_version: out.version,
+          signature: Boolean(data.generation.signature),
+        },
+      },
+    );
+
+    return {
+      ok: true,
+      document_id: docId,
+      filename,
+      storage_path: storagePath,
+      size_bytes: out.bytes.length,
+    };
+  });
