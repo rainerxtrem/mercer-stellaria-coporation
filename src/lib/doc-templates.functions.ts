@@ -618,12 +618,122 @@ async function ensureVersionText(context: any, version: any): Promise<string> {
   return sanitizeUnicode(doc.text ?? "").slice(0, 200_000);
 }
 
+async function downloadVersionBytes(context: any, version: any): Promise<Uint8Array> {
+  const { data: blob, error: dlErr } = await context.supabase.storage.from(BUCKET).download(version.storage_path);
+  if (dlErr || !blob) throw new Error(dlErr?.message ?? "Fichier du modèle illisible.");
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 function escapeRe(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeValue(raw: unknown): string {
   return String(raw ?? "").replace(/\r\n/g, "\n").replace(/\u0000/g, "").trim();
+}
+
+function tokenToFieldName(token: string) {
+  return token
+    .replace(/^\{\{\s*|\s*\}\}$/g, "")
+    .replace(/^\[\[\s*|\s*\]\]$/g, "")
+    .trim();
+}
+
+async function buildNativePdfFromTemplate(input: {
+  templateBytes: Uint8Array;
+  fields: any[];
+  values: Record<string, string | null>;
+  signature?: {
+    first_name: string;
+    last_name: string;
+    method: "drawn" | "generated";
+    style?: string | null;
+    image_base64: string;
+    placements: Array<{ page: number; x: number; y: number; width: number; height: number }>;
+  } | null;
+}) {
+  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+  const { base64ToBytes } = await import("@/lib/signature-utils");
+
+  const pdf = await PDFDocument.load(input.templateBytes, { ignoreEncryption: true });
+  const form = pdf.getForm();
+  const allFields = form.getFields();
+  const fieldsByName = new Map(allFields.map((f: any) => [String(f.getName()), f]));
+
+  let matched = 0;
+  for (const f of input.fields) {
+    const key = String(f?.key ?? "").trim();
+    if (!key) continue;
+    const value = normalizeValue(input.values[key] ?? f?.default_value ?? "");
+    if (!value) continue;
+
+    const names = [
+      key,
+      tokenToFieldName(String(f?.token ?? "")),
+      String(f?.label ?? "").trim(),
+    ].filter((v, i, arr) => Boolean(v) && arr.indexOf(v) === i);
+
+    let target: any = null;
+    for (const name of names) {
+      target = fieldsByName.get(name)
+        ?? allFields.find((x: any) => String(x.getName()).toLowerCase() === name.toLowerCase())
+        ?? null;
+      if (target) break;
+    }
+    if (!target) continue;
+
+    const kind = target?.constructor?.name ?? "";
+    try {
+      if (kind === "PDFTextField") {
+        target.setText(value);
+        matched += 1;
+      } else if (kind === "PDFDropdown") {
+        target.select(value);
+        matched += 1;
+      } else if (kind === "PDFCheckBox") {
+        if (/^(1|true|oui|yes|x)$/i.test(value)) target.check();
+        else target.uncheck();
+        matched += 1;
+      }
+    } catch {
+      // Ignore unsupported field type/value mismatch and continue.
+    }
+  }
+
+  if (matched > 0) {
+    try {
+      form.flatten();
+    } catch {
+      // Some PDFs cannot be flattened; keep interactive fields in that case.
+    }
+  }
+
+  if (input.signature) {
+    const jpeg = await pdf.embedJpg(base64ToBytes(input.signature.image_base64));
+    const pages = pdf.getPages();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const signedAt = new Date().toISOString();
+    for (const p of input.signature.placements) {
+      const pageIdx = Math.max(0, Math.min((p.page || 1) - 1, pages.length - 1));
+      const page = pages[pageIdx];
+      if (!page) continue;
+      const w = Math.max(40, Math.min(p.width, page.getWidth()));
+      const h = Math.max(20, Math.min(p.height, page.getHeight()));
+      const x = Math.max(0, Math.min(p.x, page.getWidth() - w));
+      const y = Math.max(0, page.getHeight() - p.y - h);
+      page.drawImage(jpeg, { x, y, width: w, height: h });
+      page.drawLine({ start: { x, y: Math.max(0, y - 3) }, end: { x: x + w, y: Math.max(0, y - 3) }, thickness: 0.5, color: rgb(0.78, 0.8, 0.84) });
+      page.drawText(
+        `${input.signature.first_name} ${input.signature.last_name} — signe le ${formatDateTime(signedAt)}`,
+        { x, y: Math.max(0, y - 12), size: 6, font, color: rgb(0.42, 0.43, 0.48) },
+      );
+    }
+  }
+
+  return {
+    bytes: new Uint8Array(await pdf.save()),
+    matchedFields: matched,
+  };
 }
 
 function fillTemplateText(base: string, fields: any[], values: Record<string, string | null>) {
@@ -803,6 +913,27 @@ async function generateDocumentBytes(context: any, input: z.infer<typeof generat
   }
 
   const fields = Array.isArray(version.fields) ? version.fields : [];
+  const hasInputValues = Object.values(input.values ?? {}).some((v) => normalizeValue(v).length > 0);
+
+  const isPdf = String(version.mime_type ?? "").includes("pdf") || String(version.file_name ?? "").toLowerCase().endsWith(".pdf");
+  if (isPdf) {
+    const templateBytes = await downloadVersionBytes(context, version);
+    const native = await buildNativePdfFromTemplate({
+      templateBytes,
+      fields,
+      values: input.values ?? {},
+      signature: input.signature ?? null,
+    });
+    if (native.matchedFields > 0 || !hasInputValues) {
+      return {
+        bytes: native.bytes,
+        templateId: String((tpl as any).id),
+        templateName: String((tpl as any).name ?? "Document"),
+        version: Number(version.version ?? 1),
+      };
+    }
+  }
+
   const text = await ensureVersionText(context, version);
   const filled = fillTemplateText(text, fields, input.values ?? {});
   const metadataLines = [
