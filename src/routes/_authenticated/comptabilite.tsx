@@ -902,7 +902,6 @@ function OperationsTable({
           <TableHead>Date</TableHead>
           <TableHead>Société</TableHead>
           <TableHead>Type</TableHead>
-          <TableHead>Facture</TableHead>
           <TableHead>Client/Fournisseur</TableHead>
           <TableHead>Émetteur</TableHead>
           <TableHead className="text-right">Montant</TableHead>
@@ -922,7 +921,6 @@ function OperationsTable({
                 {row.entry_side === "revenue" ? "Revenu" : row.entry_side === "expense" ? "Dépense" : "À classifier"}
               </Badge>
             </TableCell>
-            <TableCell className="font-mono text-xs">{cleanDisplayText(row.invoice_number)}</TableCell>
             <TableCell>{cleanDisplayText(row.counterparty)}</TableCell>
             <TableCell>{cleanDisplayText(row.emitter)}</TableCell>
             <TableCell className="text-right font-medium">{money(row.amount, row.currency ?? "EUR")}</TableCell>
@@ -949,7 +947,7 @@ function OperationsTable({
         ))}
         {rows.length === 0 && (
           <TableRow>
-            <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
+            <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
               Aucune opération trouvée pour ces filtres.
             </TableCell>
           </TableRow>

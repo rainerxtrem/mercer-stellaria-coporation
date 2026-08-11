@@ -61,6 +61,34 @@ function cleanCounterparty(raw: string | null | undefined): string | null {
   return value.length > 0 ? value : null;
 }
 
+function isLikelyLogLabel(value: string | null | undefined): boolean {
+  const v = normalizeText(value);
+  if (!v) return false;
+  return v.includes("log") || v.includes("discord") || v.includes("vizu");
+}
+
+function extractHumanEmitter(description: string | null | undefined): string | null {
+  const text = cleanCounterparty(description);
+  if (!text) return null;
+
+  const patterns = [
+    /^([^\n\r]{2,120}?)\s+a\s+pay[ée]e?\s+une\s+facture/i,
+    /^([^\n\r]{2,120}?)\s+a\s+pay[ée]e?\s+avec\s+le\s+compte/i,
+    /^([^\n\r]{2,120}?)\s+a\s+envoy[ée]e?/i,
+    /^([^\n\r]{2,120}?)\s+paid\s+(?:an\s+)?invoice/i,
+    /(?:emetteur|émetteur|sender|author)\s*[:\-]\s*([^\n\r,;]{2,120})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const candidate = cleanCounterparty(text.match(pattern)?.[1] ?? null);
+    if (!candidate) continue;
+    if (isLikelyLogLabel(candidate)) continue;
+    return candidate;
+  }
+
+  return null;
+}
+
 function isValidInvoiceToken(value: string | null | undefined): boolean {
   const token = String(value ?? "").trim();
   if (token.length < 2) return false;
@@ -514,7 +542,11 @@ export const listAccountingOperations = createServerFn({ method: "GET" })
     return (rows ?? []).map((row: any) => ({
       ...row,
       counterparty: cleanCounterparty(row.counterparty),
-      emitter: emitterMap.get(String(row.webhook_event_id ?? ""))?.author_name ?? null,
+      emitter:
+        extractHumanEmitter(row.description) ??
+        (isLikelyLogLabel(emitterMap.get(String(row.webhook_event_id ?? ""))?.author_name)
+          ? null
+          : emitterMap.get(String(row.webhook_event_id ?? ""))?.author_name ?? null),
       occurred_at: emitterMap.get(String(row.webhook_event_id ?? ""))?.occurred_at ?? null,
       company_name: row.company_id ? companyMap.get(row.company_id) ?? "-" : "-",
     }));
