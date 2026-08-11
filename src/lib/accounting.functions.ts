@@ -651,7 +651,7 @@ export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" }
         raw_payload: event.raw_payload ?? {},
       };
 
-      const onConflict = event.discord_message_id ? "firm_id,discord_message_id" : "webhook_event_id";
+      const onConflict = "webhook_event_id";
       const { error: opError } = await supabaseAdmin
         .from("accounting_operations")
         .upsert(operationPayload, { onConflict });
@@ -869,7 +869,7 @@ export async function ingestAccountingDiscordWebhook(rawPayload: AccountingDisco
 
   const { data: operation, error: operationError } = await supabaseAdmin
     .from("accounting_operations")
-    .upsert(opPayload, { onConflict: "firm_id,discord_message_id" })
+    .upsert(opPayload, { onConflict: "webhook_event_id" })
     .select("id")
     .single();
 
