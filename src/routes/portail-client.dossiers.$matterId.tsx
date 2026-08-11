@@ -58,7 +58,7 @@ function ClientPortalMatterPage() {
       });
 
       const uploadRes = await fetch(created.signed_url, {
-        method: "PUT",
+        method: "POST",
         headers: {
           "content-type": file.type || "application/octet-stream",
           "x-upsert": "true",

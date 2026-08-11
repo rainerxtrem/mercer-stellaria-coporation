@@ -231,7 +231,7 @@ function Page() {
         mime_type: file.type || "application/octet-stream",
         size_bytes: file.size,
       }});
-      const putRes = await fetch(meta.signed_url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
+      const putRes = await fetch(meta.signed_url, { method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
       if (!putRes.ok) throw new Error(`Upload échoué (${putRes.status})`);
       await finalizeFn({ data: {
         doc_id: meta.doc_id,

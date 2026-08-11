@@ -84,7 +84,7 @@ function PortailClientRemboursementsPage() {
           },
         });
         const response = await fetch(upload.signed_url, {
-          method: "PUT",
+          method: "POST",
           headers: { "Content-Type": file.type || "application/octet-stream" },
           body: file,
         });

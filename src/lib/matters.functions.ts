@@ -337,6 +337,19 @@ export const finalizeDocument = createServerFn({ method: "POST" })
     size_bytes: z.number().int().nonnegative().parse(d.size_bytes),
   }))
   .handler(async ({ data, context }) => {
+    const { data: objectRow, error: objectError } = await context.supabase
+      .from("storage.objects")
+      .select("metadata")
+      .eq("bucket_id", "bar-media")
+      .eq("name", data.storage_path)
+      .maybeSingle();
+    if (objectError) throw new Error(objectError.message);
+
+    const uploadedSize = Number((objectRow as any)?.metadata?.size ?? 0);
+    if (!objectRow || !Number.isFinite(uploadedSize) || uploadedSize <= 0) {
+      throw new Error("Le televersement du fichier est incomplet. Reessayez l'import.");
+    }
+
     const { error } = await context.supabase.from("matter_documents").insert({
       id: data.doc_id,
       matter_id: data.matter_id,
