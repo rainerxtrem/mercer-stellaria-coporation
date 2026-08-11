@@ -205,11 +205,29 @@ export const listMatterTree = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { matter_id: string }) => ({ matter_id: z.string().uuid().parse(d.matter_id) }))
   .handler(async ({ data, context }) => {
-    const [{ data: folders }, { data: documents }] = await Promise.all([
+    const [{ data: folders }, { data: documents }, { data: signedLinks }] = await Promise.all([
       context.supabase.from("matter_folders").select("*").eq("matter_id", data.matter_id).order("name"),
       context.supabase.from("matter_documents").select("*").eq("matter_id", data.matter_id).order("filename"),
+      context.supabase
+        .from("signature_links")
+        .select("matter_document_id, signed_at")
+        .eq("active", true)
+        .not("matter_document_id", "is", null),
     ]);
-    return { folders: folders ?? [], documents: documents ?? [] };
+
+    const signedDocIds = new Set<string>();
+    for (const link of signedLinks ?? []) {
+      if (link?.matter_document_id && link?.signed_at) {
+        signedDocIds.add(String(link.matter_document_id));
+      }
+    }
+
+    const docs = (documents ?? []).map((doc: any) => ({
+      ...doc,
+      is_signed: signedDocIds.has(String(doc.id)),
+    }));
+
+    return { folders: folders ?? [], documents: docs };
   });
 
 export const createFolder = createServerFn({ method: "POST" })

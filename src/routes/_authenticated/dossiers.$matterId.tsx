@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_authenticated/dossiers/$matterId")({
 });
 
 type Folder = { id: string; matter_id: string; parent_id: string | null; name: string };
-type Doc = { id: string; matter_id: string; folder_id: string | null; filename: string; storage_path: string; mime_type: string; size_bytes: number; created_at: string };
+type Doc = { id: string; matter_id: string; folder_id: string | null; filename: string; storage_path: string; mime_type: string; size_bytes: number; created_at: string; is_signed?: boolean };
 
 function formatSize(b: number) {
   if (b < 1024) return `${b} o`;
@@ -427,14 +427,18 @@ function Page() {
                                 <div className="truncate font-medium">{d.filename}</div>
                                 <div className="text-xs text-muted-foreground">{formatSize(d.size_bytes)} · {new Date(d.created_at).toLocaleString("fr-FR")}</div>
                               </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => signDoc.mutate(d.id)}
-                                disabled={signDoc.isPending}
-                              >
-                                <FileSignature className="mr-1.5 h-4 w-4" />Faire signer
-                              </Button>
+                              {d.is_signed ? (
+                                <Badge variant="secondary">Signé</Badge>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => signDoc.mutate(d.id)}
+                                  disabled={signDoc.isPending}
+                                >
+                                  <FileSignature className="mr-1.5 h-4 w-4" />Faire signer
+                                </Button>
+                              )}
                               <Button size="icon" variant="ghost" onClick={() => handleDownload(d.id)} aria-label="Télécharger"><Download className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => { const n = prompt("Nouveau nom", d.filename); if (n) rnDoc.mutate({ id: d.id, filename: n }); }} aria-label="Renommer"><Pencil className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Supprimer « ${d.filename} » ?`)) rmDoc.mutate(d.id); }} aria-label="Supprimer"><Trash2 className="h-4 w-4 text-destructive" /></Button>
