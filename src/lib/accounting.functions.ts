@@ -71,6 +71,11 @@ function extractHumanEmitter(description: string | null | undefined): string | n
   const text = cleanCounterparty(description);
   if (!text) return null;
 
+  const employeeBlock = cleanCounterparty(
+    text.match(/(?:employe|employé)\s*[\s\S]{0,120}?nom\s*:\s*([^\n\r]{2,120})/i)?.[1] ?? null,
+  );
+  if (employeeBlock && !isLikelyLogLabel(employeeBlock)) return employeeBlock;
+
   const patterns = [
     /^([^\n\r]{2,120}?)\s+a\s+pay[ée]e?\s+une\s+facture/i,
     /^([^\n\r]{2,120}?)\s+a\s+pay[ée]e?\s+avec\s+le\s+compte/i,
@@ -233,6 +238,7 @@ function classifyMessage(input: {
   entryType: string | null;
   invoiceNumber: string | null;
   counterparty: string | null;
+  emitterName: string | null;
   description: string | null;
   amount: number | null;
   currency: string;
@@ -345,6 +351,7 @@ function classifyMessage(input: {
       genericMatch?.[1]?.trim() ??
       null,
   );
+  const emitterName = extractHumanEmitter(text);
 
   const description = text.length > 0 ? text.slice(0, 600) : null;
   const definitionCandidate = extractDefinitionCandidate(text);
@@ -366,6 +373,7 @@ function classifyMessage(input: {
     entryType,
     invoiceNumber,
     counterparty,
+    emitterName,
     description,
     amount,
     currency,
@@ -486,7 +494,7 @@ export const listAccountingOperations = createServerFn({ method: "GET" })
 
     let q = context.supabase
       .from("accounting_operations")
-      .select("id, company_id, webhook_event_id, source, discord_message_id, entry_side, entry_type, invoice_number, counterparty, description, amount, currency, operation_date, due_date, payment_date, status, needs_classification, created_at, updated_at")
+      .select("id, company_id, webhook_event_id, source, discord_message_id, entry_side, entry_type, invoice_number, counterparty, emitter_name, description, amount, currency, operation_date, due_date, payment_date, status, needs_classification, created_at, updated_at")
       .eq("firm_id", firmId)
       .order("operation_date", { ascending: false })
       .order("created_at", { ascending: false });
@@ -543,6 +551,7 @@ export const listAccountingOperations = createServerFn({ method: "GET" })
       ...row,
       counterparty: cleanCounterparty(row.counterparty),
       emitter:
+        cleanCounterparty(row.emitter_name) ??
         extractHumanEmitter(row.description) ??
         (isLikelyLogLabel(emitterMap.get(String(row.webhook_event_id ?? ""))?.author_name)
           ? null
@@ -621,6 +630,7 @@ export const updateAccountingOperation = createServerFn({ method: "POST" })
     entry_type?: string | null;
     invoice_number?: string | null;
     counterparty?: string | null;
+    emitter_name?: string | null;
     description?: string | null;
     amount?: number | null;
     currency?: string | null;
@@ -636,6 +646,7 @@ export const updateAccountingOperation = createServerFn({ method: "POST" })
     entry_type: z.string().trim().max(120).nullable().optional().parse(d.entry_type ?? undefined),
     invoice_number: z.string().trim().max(120).nullable().optional().parse(d.invoice_number ?? undefined),
     counterparty: z.string().trim().max(220).nullable().optional().parse(d.counterparty ?? undefined),
+    emitter_name: z.string().trim().max(220).nullable().optional().parse(d.emitter_name ?? undefined),
     description: z.string().trim().max(2000).nullable().optional().parse(d.description ?? undefined),
     amount: z.number().nullable().optional().parse(d.amount ?? undefined),
     currency: z.string().trim().max(8).nullable().optional().parse(d.currency ?? undefined),
@@ -657,6 +668,7 @@ export const updateAccountingOperation = createServerFn({ method: "POST" })
       "entry_type",
       "invoice_number",
       "counterparty",
+      "emitter_name",
       "description",
       "amount",
       "currency",
@@ -857,6 +869,7 @@ export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" }
         entry_type: classification.entryType,
         invoice_number: classification.invoiceNumber,
         counterparty: classification.counterparty,
+        emitter_name: classification.emitterName,
         description: classification.description,
         amount: classification.amount,
         currency: classification.currency,
@@ -1100,6 +1113,7 @@ export async function ingestAccountingDiscordWebhook(rawPayload: AccountingDisco
     entry_type: classification.entryType,
     invoice_number: classification.invoiceNumber,
     counterparty: classification.counterparty,
+    emitter_name: classification.emitterName,
     description: classification.description,
     amount: classification.amount,
     currency: classification.currency,

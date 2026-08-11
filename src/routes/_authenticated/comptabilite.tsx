@@ -123,6 +123,14 @@ const STATUS_OPTIONS = [
   { value: "recorded", label: "Enregistré" },
 ];
 
+function statusToneClass(status: string | null | undefined) {
+  if (status === "paid") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (status === "overdue") return "border-red-500/40 bg-red-500/10 text-red-200";
+  if (status === "pending") return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+  if (status === "to_classify") return "border-sky-500/40 bg-sky-500/10 text-sky-200";
+  return "border-slate-500/40 bg-slate-500/10 text-slate-100";
+}
+
 function getWeekStartSunday20(value: string | null | undefined): Date {
   const now = new Date();
   const source = value ? new Date(value) : now;
@@ -821,6 +829,10 @@ function ComptabilitePage() {
                 <Input value={operationDraft.counterparty ?? ""} onChange={(event) => setOperationDraft((prev: any) => ({ ...prev, counterparty: event.target.value }))} />
               </div>
               <div className="space-y-1">
+                <Label>Émetteur</Label>
+                <Input value={operationDraft.emitter_name ?? operationDraft.emitter ?? ""} onChange={(event) => setOperationDraft((prev: any) => ({ ...prev, emitter_name: event.target.value }))} />
+              </div>
+              <div className="space-y-1">
                 <Label>Montant</Label>
                 <Input type="number" value={operationDraft.amount ?? ""} onChange={(event) => setOperationDraft((prev: any) => ({ ...prev, amount: event.target.value ? Number(event.target.value) : null }))} />
               </div>
@@ -922,14 +934,14 @@ function OperationsTable({
               </Badge>
             </TableCell>
             <TableCell>{cleanDisplayText(row.counterparty)}</TableCell>
-            <TableCell>{cleanDisplayText(row.emitter)}</TableCell>
+            <TableCell>{cleanDisplayText(row.emitter_name ?? row.emitter)}</TableCell>
             <TableCell className="text-right font-medium">{money(row.amount, row.currency ?? "EUR")}</TableCell>
             <TableCell>
               <Select
                 value={row.status ?? "recorded"}
                 onValueChange={(value) => onStatusChange(String(row.id), value)}
               >
-                <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`h-8 w-[150px] ${statusToneClass(row.status)}`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {STATUS_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
