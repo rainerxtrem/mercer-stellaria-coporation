@@ -50,6 +50,7 @@ function SignaturePage() {
   const submitFn = useServerFn(submitSignature);
 
   const [state, setState] = useState<any>(null);
+  const [fatalError, setFatalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pin, setPin] = useState("");
   const [pages, setPages] = useState<{ width: number; height: number }[]>([]);
@@ -69,11 +70,14 @@ function SignaturePage() {
 
   const load = async (withPin?: string) => {
     setLoading(true);
+    setFatalError(null);
     try {
       const r: any = await openFn({ data: { token, pin: withPin ?? null, origin: window.location.origin } });
       setState(r);
     } catch (e: any) {
-      toast.error(e?.message ?? "Lien invalide");
+      const message = e?.message ?? "Lien invalide";
+      setFatalError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -199,6 +203,17 @@ function SignaturePage() {
 
   if (loading) {
     return <Centered><Loader2 className="h-6 w-6 animate-spin text-gold" /><p className="mt-3 text-sm text-muted-foreground">Chargement du document sécurisé…</p></Centered>;
+  }
+
+  if (fatalError) {
+    return (
+      <Centered>
+        <XCircle className="h-10 w-10 text-destructive" />
+        <h1 className="mt-4 text-xl font-semibold">Chargement impossible</h1>
+        <p className="mt-2 max-w-md text-sm text-muted-foreground">{fatalError}</p>
+        <p className="mt-4 text-xs text-muted-foreground">Contactez votre avocat pour régénérer le lien si nécessaire.</p>
+      </Centered>
+    );
   }
 
   if (!state || ["not_found", "revoked", "expired", "exhausted", "unsupported_type"].includes(state.status)) {

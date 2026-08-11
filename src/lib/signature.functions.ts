@@ -21,19 +21,69 @@ function publicMatterDocument(doc: any) {
     due_date: null,
     total: 0,
     currency: "",
-    owner_name: doc?.matters?.owner_name ?? "Avocat",
+    owner_name: doc?.owner_name ?? "Avocat",
     client_name: null,
-    matter_number: doc?.matters?.number ?? null,
+    matter_number: doc?.matter_number ?? null,
   };
 }
 
 async function fetchSignatureLinkByToken(supabaseAdmin: any, token: string) {
-  const { data: link } = await supabaseAdmin
+  const { data: link, error } = await supabaseAdmin
     .from("signature_links")
-    .select("*, invoices(*, matters(id,number,title)), matter_documents(id,matter_id,filename,storage_path,mime_type,size_bytes,version,uploaded_by,created_at,matters(id,number,title,owner_id))")
+    .select("id, token, created_by, expires_at, max_opens, opens_count, pin_hash, active, invalidate_on_sign, revoked_at, first_opened_at, signed_at, created_at, updated_at, invoice_id, matter_document_id")
     .eq("token", token)
     .maybeSingle();
+  if (error) throw new Error(error.message);
   return link as any;
+}
+
+async function hydrateLinkTarget(supabaseAdmin: any, link: any) {
+  if (link.invoice_id) {
+    const { data: inv, error: invErr } = await supabaseAdmin
+      .from("invoices")
+      .select("*, matters(id,number,title)")
+      .eq("id", link.invoice_id)
+      .maybeSingle();
+    if (invErr) throw new Error(invErr.message);
+    if (!inv) throw new Error("Document introuvable.");
+    return { invoice: inv as any, matterDocument: null };
+  }
+
+  if (link.matter_document_id) {
+    const { data: doc, error: docErr } = await supabaseAdmin
+      .from("matter_documents")
+      .select("id, matter_id, filename, storage_path, mime_type, size_bytes, version, uploaded_by, created_at")
+      .eq("id", link.matter_document_id)
+      .maybeSingle();
+    if (docErr) throw new Error(docErr.message);
+    if (!doc) throw new Error("Document introuvable.");
+
+    const { data: matter, error: matterErr } = await supabaseAdmin
+      .from("matters")
+      .select("id, number, owner_id")
+      .eq("id", doc.matter_id)
+      .maybeSingle();
+    if (matterErr) throw new Error(matterErr.message);
+    if (!matter) throw new Error("Dossier introuvable.");
+
+    const { data: owner } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", matter.owner_id)
+      .maybeSingle();
+
+    return {
+      invoice: null,
+      matterDocument: {
+        ...doc,
+        matter_number: matter.number,
+        owner_id: matter.owner_id,
+        owner_name: owner?.full_name ?? "Avocat",
+      },
+    };
+  }
+
+  throw new Error("Lien de signature invalide (cible manquante).");
 }
 
 // ============ AVOCAT : liste des liens + historique ============
@@ -114,6 +164,15 @@ export const createSignatureLink = createServerFn({ method: "POST" })
       .select("id, token, expires_at, max_opens, invalidate_on_sign, created_at")
       .single();
     if (error) throw new Error(error.message);
+
+    const { data: persisted, error: persistedErr } = await context.supabase
+      .from("signature_links")
+      .select("id, token")
+      .eq("id", link.id)
+      .maybeSingle();
+    if (persistedErr || !persisted?.token) {
+      throw new Error(persistedErr?.message ?? "Le lien de signature n'a pas pu être persisté.");
+    }
 
     const { data: prof } = await context.supabase
       .from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
@@ -211,9 +270,13 @@ export const createMatterDocumentSignatureLink = createServerFn({ method: "POST"
       { entity_type: "document", entity_id: data.document_id },
     );
 
+    const createdToken = persisted.token;
+    if (!createdToken) throw new Error("Le lien de signature n'a pas pu être créé.");
+
     return {
       ...link,
-      url: `${data.origin}/signature/${link.token}`,
+      token: createdToken,
+      url: `${data.origin}/signature/${createdToken}`,
     };
   });
 
@@ -279,8 +342,7 @@ export const openSignatureDocument = createServerFn({ method: "POST" })
     const link = await fetchSignatureLinkByToken(supabaseAdmin, data.token);
     if (!link) return { status: "not_found" as const };
 
-    const inv: any = (link as any).invoices;
-    const doc: any = (link as any).matter_documents;
+    const { invoice: inv, matterDocument: doc } = await hydrateLinkTarget(supabaseAdmin, link);
     const publicDocument = inv ? publicDoc(inv) : publicMatterDocument(doc);
     const { data: existing } = await supabaseAdmin
       .from("document_signatures")
@@ -423,8 +485,7 @@ export const submitSignature = createServerFn({ method: "POST" })
       .from("document_signatures").select("id").eq("link_id", link.id).maybeSingle();
     if (already) throw new Error("Ce document a déjà été signé.");
 
-    const inv: any = (link as any).invoices;
-    const doc: any = (link as any).matter_documents;
+    const { invoice: inv, matterDocument: doc } = await hydrateLinkTarget(supabaseAdmin, link);
     const signature_uid = generateSignatureUid();
     const signed_at = new Date().toISOString();
     const ip_address = getRequestIP({ xForwardedFor: true }) ?? null;
@@ -612,9 +673,9 @@ export const submitSignature = createServerFn({ method: "POST" })
         entity_type: "invoice",
         entity_id: inv.id,
       });
-    } else if (doc?.matters?.owner_id) {
+    } else if (doc?.owner_id) {
       await supabaseAdmin.from("notifications").insert({
-        user_id: doc.matters.owner_id,
+        user_id: doc.owner_id,
         type: "document_signed",
         title: "Document signé",
         body: `${data.first_name} ${data.last_name} a signé le document ${doc.filename}.`,
