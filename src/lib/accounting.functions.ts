@@ -70,10 +70,25 @@ function classifyMessage(input: {
   paymentDate: string | null;
   needsClassification: boolean;
 } {
+  const extractEmbedText = (embed: any): string => {
+    const fieldText = Array.isArray(embed?.fields)
+      ? embed.fields
+          .map((field: any) => `${String(field?.name ?? "")} ${String(field?.value ?? "")}`.trim())
+          .join(" ")
+      : "";
+    return [
+      String(embed?.title ?? ""),
+      String(embed?.description ?? ""),
+      String(embed?.author?.name ?? ""),
+      String(embed?.footer?.text ?? ""),
+      fieldText,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  };
+
   const embedText = Array.isArray(input.embeds)
-    ? input.embeds
-        .map((e: any) => `${String(e?.title ?? "")} ${String(e?.description ?? "")}`.trim())
-        .join(" ")
+    ? input.embeds.map((e: any) => extractEmbedText(e)).join(" ")
     : "";
   const text = `${input.content ?? ""} ${embedText}`.trim();
   const lower = text.toLowerCase();
@@ -83,6 +98,9 @@ function classifyMessage(input: {
     "paiement reçu",
     "paiement recu",
     "encaissement",
+    "a payé une facture",
+    "a paye une facture",
+    "facture",
     "facture payée",
     "facture payee",
     "invoice paid",
@@ -96,6 +114,11 @@ function classifyMessage(input: {
     "charge",
     "dépense",
     "depense",
+    "paiement entreprise",
+    "a payé avec le compte de l'entreprise",
+    "a paye avec le compte de l'entreprise",
+    "compte de l'entreprise",
+    "carburant",
     "payment sent",
     "supplier",
   ];
@@ -103,12 +126,19 @@ function classifyMessage(input: {
   const isRevenue = revenueHints.some((hint) => lower.includes(hint));
   const isExpense = expenseHints.some((hint) => lower.includes(hint));
 
-  const invoiceMatch = text.match(/(?:facture|invoice)\s*(?:#|n[o°])?\s*([a-zA-Z0-9-]{3,})/i);
+  const invoiceMatch = text.match(/(?:facture|invoice)\s*(?:#|n[o°])?\s*([a-zA-Z0-9-]{2,})/i);
   const amountMatch = text.match(/(-?\d[\d\s.,]*)\s*(€|eur|usd|\$|xaf|xof|cad|gbp)/i);
   const dueMatch = text.match(/(?:echeance|échéance|due date)\s*[:\-]?\s*([\d\/-]{8,10}|\d{4}-\d{2}-\d{2})/i);
   const paidMatch = text.match(/(?:date de paiement|paid on|payée le|payee le)\s*[:\-]?\s*([\d\/-]{8,10}|\d{4}-\d{2}-\d{2})/i);
 
-  const side = isRevenue && !isExpense
+  const explicitRevenue = /a\s+pay[ée]e?\s+une\s+facture|facture\s+pay[ée]e?/i.test(text);
+  const explicitExpense = /paiement\s+entreprise|compte\s+de\s+l['’]entreprise|carburant|achat/i.test(text);
+
+  const side = explicitRevenue && !explicitExpense
+    ? "revenue"
+    : explicitExpense && !explicitRevenue
+      ? "expense"
+      : isRevenue && !isExpense
     ? "revenue"
     : isExpense && !isRevenue
       ? "expense"
@@ -133,8 +163,14 @@ function classifyMessage(input: {
   const dueDate = parseDateCandidate(dueMatch?.[1] ?? null);
   const paymentDate = parseDateCandidate(paidMatch?.[1] ?? null);
 
-  const companyMatch = text.match(/(?:client|fournisseur|vendor|supplier)\s*[:\-]?\s*([^\n\r,;]{2,120})/i);
-  const counterparty = companyMatch?.[1]?.trim() ?? null;
+  const clientNameMatch = text.match(/client\s*[\s\S]{0,60}?nom\s*:\s*([^\n\r]{2,120})/i);
+  const supplierNameMatch = text.match(/(?:fournisseur|vendor|supplier)\s*[\s\S]{0,60}?nom\s*:\s*([^\n\r]{2,120})/i);
+  const genericMatch = text.match(/(?:client|fournisseur|vendor|supplier)\s*[:\-]?\s*([^\n\r,;]{2,120})/i);
+  const counterparty =
+    clientNameMatch?.[1]?.trim() ??
+    supplierNameMatch?.[1]?.trim() ??
+    genericMatch?.[1]?.trim() ??
+    null;
 
   const description = text.length > 0 ? text.slice(0, 600) : null;
 
@@ -452,6 +488,12 @@ export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" }
     const firmId = await requireActiveFirmId(context as Ctx);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    const botToken =
+      process.env.DISCORD_BOT_TOKEN?.trim() ||
+      process.env.DISCORD_TOKEN?.trim() ||
+      process.env.BOT_TOKEN?.trim() ||
+      "";
+
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - 7);
 
@@ -483,8 +525,85 @@ export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" }
     let processed = 0;
     let anomalies = 0;
     let upserted = 0;
+    let fetchedFromDiscord = 0;
 
-    for (const event of events ?? []) {
+    async function fetchChannelMessagesSince(channelId: string, sinceIso: string): Promise<any[]> {
+      if (!botToken) return [];
+      const sinceTs = new Date(sinceIso).getTime();
+      if (Number.isNaN(sinceTs)) return [];
+
+      const collected: any[] = [];
+      let before: string | null = null;
+
+      for (let page = 0; page < 10; page += 1) {
+        const url = new URL(`https://discord.com/api/v10/channels/${channelId}/messages`);
+        url.searchParams.set("limit", "100");
+        if (before) url.searchParams.set("before", before);
+
+        const response = await fetch(url.toString(), {
+          headers: {
+            Authorization: `Bot ${botToken}`,
+            "content-type": "application/json",
+          },
+        });
+
+        if (!response.ok) break;
+        const batch = (await response.json()) as any[];
+        if (!Array.isArray(batch) || batch.length === 0) break;
+
+        let reachedOlder = false;
+        for (const message of batch) {
+          const ts = new Date(message?.timestamp ?? 0).getTime();
+          if (!Number.isFinite(ts) || ts < sinceTs) {
+            reachedOlder = true;
+            continue;
+          }
+          collected.push(message);
+        }
+
+        before = String(batch[batch.length - 1]?.id ?? "");
+        if (!before || reachedOlder) break;
+      }
+
+      return collected;
+    }
+
+    if (botToken) {
+      for (const company of companies ?? []) {
+        if (!company.discord_server_id || !company.discord_channel_id) continue;
+        const channelMessages = await fetchChannelMessagesSince(company.discord_channel_id, fromDate.toISOString());
+        fetchedFromDiscord += channelMessages.length;
+
+        for (const message of channelMessages) {
+          await ingestAccountingDiscordWebhook({
+            firm_id: firmId,
+            server_id: company.discord_server_id,
+            channel_id: company.discord_channel_id,
+            message_id: String(message?.id ?? "") || null,
+            date: typeof message?.timestamp === "string" ? message.timestamp : null,
+            author:
+              String(message?.author?.global_name ?? "") ||
+              String(message?.author?.username ?? "") ||
+              null,
+            content: typeof message?.content === "string" ? message.content : null,
+            embeds: Array.isArray(message?.embeds) ? message.embeds : [],
+            attachments: Array.isArray(message?.attachments) ? message.attachments : [],
+          });
+        }
+      }
+    }
+
+    const { data: refreshedEvents, error: refreshedEventsError } = await supabaseAdmin
+      .from("accounting_webhook_events")
+      .select("id, company_id, discord_server_id, discord_channel_id, discord_message_id, occurred_at, author_name, content, embeds, attachments, raw_payload")
+      .eq("firm_id", firmId)
+      .eq("source", "discord")
+      .gte("occurred_at", fromDate.toISOString())
+      .order("occurred_at", { ascending: true });
+
+    if (refreshedEventsError) throw new Error(refreshedEventsError.message);
+
+    for (const event of refreshedEvents ?? events ?? []) {
       processed += 1;
       const key = `${event.discord_server_id ?? ""}:${event.discord_channel_id ?? ""}`;
       const resolvedCompany = event.company_id
@@ -560,6 +679,8 @@ export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" }
       processed,
       anomalies,
       upserted,
+      fetched_from_discord: fetchedFromDiscord,
+      discord_backfill_enabled: Boolean(botToken),
       from: fromDate.toISOString(),
       to: new Date().toISOString(),
     };
@@ -576,6 +697,11 @@ export type AccountingDiscordWebhookPayload = {
   content?: string | null;
   embeds?: unknown[];
   attachments?: unknown[];
+  id?: string | null;
+  timestamp?: string | null;
+  author_username?: string | null;
+  author_name?: string | null;
+  author_object?: { username?: string | null; global_name?: string | null } | null;
 };
 
 export async function ingestAccountingDiscordWebhook(rawPayload: AccountingDiscordWebhookPayload) {
@@ -585,9 +711,15 @@ export async function ingestAccountingDiscordWebhook(rawPayload: AccountingDisco
   const explicitFirmId = payload.firm_id ?? null;
   const serverId = payload.server_id ?? payload.guild_id ?? null;
   const channelId = payload.channel_id ?? null;
-  const messageId = payload.message_id ?? null;
-  const occurredAt = payload.date ?? new Date().toISOString();
-  const author = payload.author ?? null;
+  const messageId = payload.message_id ?? payload.id ?? null;
+  const occurredAt = payload.date ?? payload.timestamp ?? new Date().toISOString();
+  const author =
+    (typeof payload.author === "string" ? payload.author : null) ??
+    payload.author_name ??
+    payload.author_username ??
+    payload.author_object?.global_name ??
+    payload.author_object?.username ??
+    null;
   const content = payload.content ?? "";
   const embeds = Array.isArray(payload.embeds) ? payload.embeds : [];
   const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];

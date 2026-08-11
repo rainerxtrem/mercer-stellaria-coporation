@@ -290,7 +290,10 @@ function ComptabilitePage() {
   const forceRefreshMut = useMutation({
     mutationFn: () => forceRefreshFn({ data: {} as any }),
     onSuccess: async (result: any) => {
-      toast.success(`Mise a jour forcee terminee: ${result.upserted} operations regenerees, ${result.anomalies} anomalies.`);
+      const extra = result.discord_backfill_enabled
+        ? ` | Discord lu: ${result.fetched_from_discord ?? 0} messages`
+        : " | Discord non lu (token bot absent)";
+      toast.success(`Mise a jour forcee terminee: ${result.upserted} operations regenerees, ${result.anomalies} anomalies.${extra}`);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["accounting", "operations"] }),
         qc.invalidateQueries({ queryKey: ["accounting", "dashboard"] }),
