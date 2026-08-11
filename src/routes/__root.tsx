@@ -100,18 +100,16 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 /** Routes that render inside the authenticated AppShell (own header + sidebar). */
-const APP_SHELL_PREFIXES = [
-  "/admin",
-  "/tableau-de-bord",
-  "/dossiers",
-  "/clients",
-  "/facturation",
-  "/portail-client",
-];
+const APP_SHELL_PREFIXES = ["/portail-client"];
 
 function useIsAppShellRoute() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  return APP_SHELL_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const routeIds = useRouterState({ select: (s) => s.matches.map((m) => m.routeId) });
+  const inAuthenticatedTree = routeIds.includes("/_authenticated");
+  const inClientPortalTree = APP_SHELL_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
+  return inAuthenticatedTree || inClientPortalTree;
 }
 
 function RootComponent() {
