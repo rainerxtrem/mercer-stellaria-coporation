@@ -249,6 +249,15 @@ export const createMatterDocumentSignatureLink = createServerFn({ method: "POST"
       .single();
     if (error) throw new Error(error.message);
 
+    const { data: persisted, error: persistedErr } = await context.supabase
+      .from("signature_links")
+      .select("id, token")
+      .eq("id", link.id)
+      .maybeSingle();
+    if (persistedErr || !persisted?.token) {
+      throw new Error(persistedErr?.message ?? "Le lien de signature n'a pas pu être persisté.");
+    }
+
     const { data: prof } = await context.supabase
       .from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
 
@@ -271,7 +280,6 @@ export const createMatterDocumentSignatureLink = createServerFn({ method: "POST"
     );
 
     const createdToken = persisted.token;
-    if (!createdToken) throw new Error("Le lien de signature n'a pas pu être créé.");
 
     return {
       ...link,
