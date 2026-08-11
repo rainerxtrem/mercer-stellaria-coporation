@@ -136,6 +136,13 @@ function extractInvoicePrefix(invoiceNumber: string | null | undefined, rawText:
     return fromNumber as InvoicePrefix;
   }
 
+  const fromTitle = rawText.match(
+    /(?:titre|title|objet|subject|libelle|libellé)\s*:\s*([HILF])\s*-/i,
+  )?.[1]?.toUpperCase();
+  if (fromTitle && ["H", "I", "L", "F"].includes(fromTitle)) {
+    return fromTitle as InvoicePrefix;
+  }
+
   const fromText = rawText.match(/(?:facture|invoice)\s*(?:#|n[o°])?\s*([HILF])\s*-/i)?.[1]?.toUpperCase();
   if (fromText && ["H", "I", "L", "F"].includes(fromText)) {
     return fromText as InvoicePrefix;

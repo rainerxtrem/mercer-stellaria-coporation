@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -221,6 +221,8 @@ function ComptabilitePage() {
   const [companyDraft, setCompanyDraft] = useState<CompanyForm>(EMPTY_COMPANY);
   const [operationDialogOpen, setOperationDialogOpen] = useState(false);
   const [operationDraft, setOperationDraft] = useState<any>(null);
+  const [initialSyncSettled, setInitialSyncSettled] = useState(false);
+  const autoSyncStartedRef = useRef(false);
 
   const companiesQ = useQuery({
     queryKey: ["accounting", "companies"],
@@ -246,12 +248,36 @@ function ComptabilitePage() {
           search: search || null,
         },
       }),
+    enabled: initialSyncSettled,
   });
 
   const anomaliesQ = useQuery({
     queryKey: ["accounting", "anomalies"],
     queryFn: () => listAnomaliesFn(),
+    enabled: initialSyncSettled,
   });
+
+  useEffect(() => {
+    if (autoSyncStartedRef.current) return;
+    autoSyncStartedRef.current = true;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await forceRefreshFn({ data: {} as any });
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(error instanceof Error ? error.message : "Synchronisation comptable impossible");
+        }
+      } finally {
+        if (!cancelled) setInitialSyncSettled(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [forceRefreshFn]);
 
   const upsertCompanyMut = useMutation({
     mutationFn: () =>
