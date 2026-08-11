@@ -201,12 +201,13 @@ function SignaturePage() {
     return <Centered><Loader2 className="h-6 w-6 animate-spin text-gold" /><p className="mt-3 text-sm text-muted-foreground">Chargement du document sécurisé…</p></Centered>;
   }
 
-  if (!state || ["not_found", "revoked", "expired", "exhausted"].includes(state.status)) {
+  if (!state || ["not_found", "revoked", "expired", "exhausted", "unsupported_type"].includes(state.status)) {
     const messages: Record<string, string> = {
       not_found: "Ce lien de signature est introuvable.",
       revoked: "Ce lien de signature a été révoqué par l'avocat.",
       expired: "Ce lien de signature a expiré.",
       exhausted: "Ce lien a atteint son nombre maximal d'ouvertures.",
+      unsupported_type: "Ce document ne peut pas être signé en ligne (format non PDF).",
     };
     return (
       <Centered>
@@ -248,6 +249,9 @@ function SignaturePage() {
   }
 
   const doc = state.document ?? {};
+  const docLabel = doc.kind === "matter_document"
+    ? "Document"
+    : (doc.kind === "quote" ? "Devis" : "Facture");
   const canSign = firstName.trim().length > 1 && lastName.trim().length > 1;
 
   return (
@@ -257,10 +261,12 @@ function SignaturePage() {
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-gold">Mercer & Stellaria Corporation</p>
             <h1 className="text-lg font-semibold">
-              {doc.kind === "quote" ? "Devis" : "Facture"} {doc.number}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                {doc.total?.toFixed?.(2)} {doc.currency}
-              </span>
+              {docLabel} {doc.number}
+              {doc.kind !== "matter_document" && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  {doc.total?.toFixed?.(2)} {doc.currency}
+                </span>
+              )}
             </h1>
           </div>
           <div className="flex items-center gap-2">

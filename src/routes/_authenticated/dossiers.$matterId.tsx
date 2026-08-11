@@ -25,6 +25,7 @@ import {
   listMatterAssistants, addMatterAssistant, removeMatterAssistant,
   listTasks, createTask, updateTask, deleteTask,
 } from "@/lib/assistant.functions";
+import { createMatterDocumentSignatureLink } from "@/lib/signature.functions";
 import { listInvoices } from "@/lib/invoices.functions";
 import { toast } from "sonner";
 import {
@@ -80,6 +81,7 @@ function Page() {
   const taskCreateFn = useServerFn(createTask);
   const taskUpdateFn = useServerFn(updateTask);
   const taskDeleteFn = useServerFn(deleteTask);
+  const signDocLinkFn = useServerFn(createMatterDocumentSignatureLink);
   const session = useSession();
   const uid = session?.user.id;
 
@@ -200,6 +202,24 @@ function Page() {
     mutationFn: (id: string) => deleteDocFn({ data: { id } }),
     onSuccess: () => { toast.success("Supprimé"); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
+  });
+  const signDoc = useMutation({
+    mutationFn: (documentId: string) => signDocLinkFn({
+      data: {
+        document_id: documentId,
+        origin: window.location.origin,
+      },
+    }),
+    onSuccess: async (res: any) => {
+      try {
+        await navigator.clipboard.writeText(String(res.url));
+        toast.success("Lien de signature créé et copié");
+      } catch {
+        toast.success("Lien de signature créé");
+      }
+      window.open(String(res.url), "_blank", "noopener,noreferrer");
+    },
+    onError: (e: any) => toast.error(e.message ?? "Impossible de créer le lien de signature"),
   });
 
   async function uploadFile(file: File) {
@@ -407,6 +427,14 @@ function Page() {
                                 <div className="truncate font-medium">{d.filename}</div>
                                 <div className="text-xs text-muted-foreground">{formatSize(d.size_bytes)} · {new Date(d.created_at).toLocaleString("fr-FR")}</div>
                               </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => signDoc.mutate(d.id)}
+                                disabled={signDoc.isPending}
+                              >
+                                <FileSignature className="mr-1.5 h-4 w-4" />Faire signer
+                              </Button>
                               <Button size="icon" variant="ghost" onClick={() => handleDownload(d.id)} aria-label="Télécharger"><Download className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => { const n = prompt("Nouveau nom", d.filename); if (n) rnDoc.mutate({ id: d.id, filename: n }); }} aria-label="Renommer"><Pencil className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Supprimer « ${d.filename} » ?`)) rmDoc.mutate(d.id); }} aria-label="Supprimer"><Trash2 className="h-4 w-4 text-destructive" /></Button>

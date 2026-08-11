@@ -11,6 +11,31 @@ const placementSchema = z.object({
   height: z.number().min(15).max(300),
 });
 
+function publicMatterDocument(doc: any) {
+  return {
+    id: doc?.id as string,
+    number: doc?.filename as string,
+    kind: "matter_document" as const,
+    status: "pending_signature" as const,
+    issue_date: doc?.created_at as string,
+    due_date: null,
+    total: 0,
+    currency: "",
+    owner_name: doc?.matters?.owner_name ?? "Avocat",
+    client_name: null,
+    matter_number: doc?.matters?.number ?? null,
+  };
+}
+
+async function fetchSignatureLinkByToken(supabaseAdmin: any, token: string) {
+  const { data: link } = await supabaseAdmin
+    .from("signature_links")
+    .select("*, invoices(*, matters(id,number,title)), matter_documents(id,matter_id,filename,storage_path,mime_type,size_bytes,version,uploaded_by,created_at,matters(id,number,title,owner_id))")
+    .eq("token", token)
+    .maybeSingle();
+  return link as any;
+}
+
 // ============ AVOCAT : liste des liens + historique ============
 export const listSignatureState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -117,6 +142,81 @@ export const createSignatureLink = createServerFn({ method: "POST" })
     return link;
   });
 
+export const createMatterDocumentSignatureLink = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    document_id: string;
+    origin: string;
+    expires_in_days?: number | null;
+    max_opens?: number | null;
+    pin?: string | null;
+    invalidate_on_sign?: boolean;
+  }) => ({
+    document_id: z.string().uuid().parse(d.document_id),
+    origin: z.string().url().parse(d.origin),
+    expires_in_days: z.number().int().min(1).max(365).nullable().optional().parse(d.expires_in_days ?? 7),
+    max_opens: z.number().int().min(1).max(100).nullable().optional().parse(d.max_opens ?? null),
+    pin: z.string().trim().regex(/^\d{4,8}$/).nullable().optional().parse(d.pin || null),
+    invalidate_on_sign: z.boolean().optional().parse(d.invalidate_on_sign ?? true),
+  }))
+  .handler(async ({ data, context }) => {
+    const { generateToken, sha256Hex } = await import("@/lib/signature-utils");
+
+    const { data: doc, error: docErr } = await context.supabase
+      .from("matter_documents")
+      .select("id, filename, mime_type, matter_id")
+      .eq("id", data.document_id)
+      .maybeSingle();
+    if (docErr || !doc) throw new Error("Document introuvable ou non accessible.");
+
+    const token = generateToken();
+    const expires_at = data.expires_in_days
+      ? new Date(Date.now() + data.expires_in_days * 86_400_000).toISOString()
+      : null;
+
+    const { data: link, error } = await context.supabase
+      .from("signature_links")
+      .insert({
+        invoice_id: null,
+        matter_document_id: data.document_id,
+        token,
+        created_by: context.userId,
+        expires_at,
+        max_opens: data.max_opens,
+        pin_hash: data.pin ? await sha256Hex(data.pin) : null,
+        invalidate_on_sign: data.invalidate_on_sign ?? true,
+      } as any)
+      .select("id, token, expires_at, max_opens, invalidate_on_sign, created_at")
+      .single();
+    if (error) throw new Error(error.message);
+
+    const { data: prof } = await context.supabase
+      .from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
+
+    await context.supabase.from("signature_events").insert({
+      link_id: link.id,
+      invoice_id: null,
+      matter_document_id: data.document_id,
+      type: "link_created",
+      actor_id: context.userId,
+      actor_label: prof?.full_name ?? "Avocat",
+      metadata: { expires_at, max_opens: data.max_opens, pin: Boolean(data.pin) },
+    } as any);
+
+    const { logMatterActivity } = await import("@/lib/activity-log");
+    await logMatterActivity(
+      context.supabase, context.userId, doc.matter_id,
+      "signature_link_created",
+      `Lien de signature émis pour le document ${doc.filename}`,
+      { entity_type: "document", entity_id: data.document_id },
+    );
+
+    return {
+      ...link,
+      url: `${data.origin}/signature/${link.token}`,
+    };
+  });
+
 // ============ AVOCAT : révocation ============
 export const revokeSignatureLink = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -176,14 +276,12 @@ export const openSignatureDocument = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sha256Hex } = await import("@/lib/signature-utils");
 
-    const { data: link } = await supabaseAdmin
-      .from("signature_links")
-      .select("*, invoices(*, matters(id,number,title))")
-      .eq("token", data.token)
-      .maybeSingle();
+    const link = await fetchSignatureLinkByToken(supabaseAdmin, data.token);
     if (!link) return { status: "not_found" as const };
 
     const inv: any = (link as any).invoices;
+    const doc: any = (link as any).matter_documents;
+    const publicDocument = inv ? publicDoc(inv) : publicMatterDocument(doc);
     const { data: existing } = await supabaseAdmin
       .from("document_signatures")
       .select("id, signature_uid, signed_at, first_name, last_name, storage_path")
@@ -198,7 +296,7 @@ export const openSignatureDocument = createServerFn({ method: "POST" })
           signed_at: existing.signed_at,
           signer: `${existing.first_name} ${existing.last_name}`,
         },
-        document: publicDoc(inv),
+        document: publicDocument,
       };
     }
     if (!link.active || link.revoked_at) return { status: "revoked" as const };
@@ -206,27 +304,42 @@ export const openSignatureDocument = createServerFn({ method: "POST" })
     if (link.max_opens && link.opens_count >= link.max_opens) return { status: "exhausted" as const };
 
     if (link.pin_hash) {
-      if (!data.pin) return { status: "pin_required" as const, document: publicDoc(inv) };
+      if (!data.pin) return { status: "pin_required" as const, document: publicDocument };
       if ((await sha256Hex(data.pin)) !== link.pin_hash) {
         await supabaseAdmin.from("signature_events").insert({
-          link_id: link.id, invoice_id: inv.id, type: "pin_failed", actor_label: "Destinataire",
-        });
-        return { status: "pin_invalid" as const, document: publicDoc(inv) };
+          link_id: link.id,
+          invoice_id: inv?.id ?? null,
+          matter_document_id: doc?.id ?? null,
+          type: "pin_failed",
+          actor_label: "Destinataire",
+        } as any);
+        return { status: "pin_invalid" as const, document: publicDocument };
       }
     }
 
-    // Rendu du PDF original (identique à celui de l'avocat)
-    const { data: items } = await supabaseAdmin
-      .from("invoice_items").select("*").eq("invoice_id", inv.id).order("position");
-    const qrMod = await import("qrcode-generator");
-    const qrcode = (qrMod as any).default ?? (qrMod as any);
-    const { buildInvoicePdf } = await import("@/lib/pdf/invoice-pdf");
-    const bytes = buildInvoicePdf({
-      invoice: inv,
-      items: (items ?? []) as any[],
-      verifyUrl: `${data.origin}/verification/facture/${inv.public_token}`,
-      qrcode,
-    });
+    let bytes: Uint8Array;
+    if (inv) {
+      // Rendu du PDF original (identique à celui de l'avocat)
+      const { data: items } = await supabaseAdmin
+        .from("invoice_items").select("*").eq("invoice_id", inv.id).order("position");
+      const qrMod = await import("qrcode-generator");
+      const qrcode = (qrMod as any).default ?? (qrMod as any);
+      const { buildInvoicePdf } = await import("@/lib/pdf/invoice-pdf");
+      bytes = buildInvoicePdf({
+        invoice: inv,
+        items: (items ?? []) as any[],
+        verifyUrl: `${data.origin}/verification/facture/${inv.public_token}`,
+        qrcode,
+      });
+    } else {
+      if (!doc?.storage_path) throw new Error("Document introuvable.");
+      if (doc.mime_type !== "application/pdf") {
+        return { status: "unsupported_type" as const, document: publicDocument };
+      }
+      const { data: file, error: dlErr } = await supabaseAdmin.storage.from("bar-media").download(doc.storage_path);
+      if (dlErr || !file) throw new Error("Impossible de charger le document.");
+      bytes = new Uint8Array(await file.arrayBuffer());
+    }
 
     await supabaseAdmin
       .from("signature_links")
@@ -237,13 +350,17 @@ export const openSignatureDocument = createServerFn({ method: "POST" })
       .eq("id", link.id);
 
     await supabaseAdmin.from("signature_events").insert({
-      link_id: link.id, invoice_id: inv.id, type: "opened", actor_label: "Destinataire",
+      link_id: link.id,
+      invoice_id: inv?.id ?? null,
+      matter_document_id: doc?.id ?? null,
+      type: "opened",
+      actor_label: "Destinataire",
       metadata: { opens_count: (link.opens_count ?? 0) + 1 },
-    });
+    } as any);
 
     return {
       status: "ok" as const,
-      document: publicDoc(inv),
+      document: publicDocument,
       pdfBase64: Buffer.from(bytes).toString("base64"),
       link: { expires_at: link.expires_at },
     };
@@ -255,11 +372,15 @@ export const markSignatureStarted = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: link } = await supabaseAdmin
-      .from("signature_links").select("id, invoice_id, active").eq("token", data.token).maybeSingle();
+      .from("signature_links").select("id, invoice_id, matter_document_id, active").eq("token", data.token).maybeSingle();
     if (!link?.active) return { ok: false };
     await supabaseAdmin.from("signature_events").insert({
-      link_id: link.id, invoice_id: link.invoice_id, type: "signature_started", actor_label: "Destinataire",
-    });
+      link_id: link.id,
+      invoice_id: (link as any).invoice_id ?? null,
+      matter_document_id: (link as any).matter_document_id ?? null,
+      type: "signature_started",
+      actor_label: "Destinataire",
+    } as any);
     return { ok: true };
   });
 
@@ -291,11 +412,7 @@ export const submitSignature = createServerFn({ method: "POST" })
     const { sha256Hex, generateSignatureUid, base64ToBytes } = await import("@/lib/signature-utils");
     const { getRequestHeader, getRequestIP } = await import("@tanstack/react-start/server");
 
-    const { data: link } = await supabaseAdmin
-      .from("signature_links")
-      .select("*, invoices(*, matters(id,number,title))")
-      .eq("token", data.token)
-      .maybeSingle();
+    const link = await fetchSignatureLinkByToken(supabaseAdmin, data.token);
     if (!link) throw new Error("Lien invalide");
     if (!link.active || link.revoked_at) throw new Error("Ce lien a été révoqué.");
     if (link.expires_at && new Date(link.expires_at) < new Date()) throw new Error("Ce lien a expiré.");
@@ -307,41 +424,83 @@ export const submitSignature = createServerFn({ method: "POST" })
     if (already) throw new Error("Ce document a déjà été signé.");
 
     const inv: any = (link as any).invoices;
+    const doc: any = (link as any).matter_documents;
     const signature_uid = generateSignatureUid();
     const signed_at = new Date().toISOString();
     const ip_address = getRequestIP({ xForwardedFor: true }) ?? null;
     const user_agent = getRequestHeader("user-agent") ?? null;
-    const verifyUrl = `${data.origin}/verification/facture/${inv.public_token}`;
+    let verifyUrl: string | null = null;
+    let filename = "document-signe.pdf";
+    let storage_path = "";
+    let bytes: Uint8Array;
 
-    // Génération du PDF signé (document original + signature + certificat)
-    const { data: items } = await supabaseAdmin
-      .from("invoice_items").select("*").eq("invoice_id", inv.id).order("position");
-    const qrMod = await import("qrcode-generator");
-    const qrcode = (qrMod as any).default ?? (qrMod as any);
-    const { buildInvoicePdf } = await import("@/lib/pdf/invoice-pdf");
-    const jpeg = base64ToBytes(data.image_base64);
-    const bytes = buildInvoicePdf({
-      invoice: inv,
-      items: (items ?? []) as any[],
-      verifyUrl,
-      qrcode,
-      signature: {
-        first_name: data.first_name,
-        last_name: data.last_name,
-        signature_uid,
-        signed_at,
-        method: data.method,
-        style: data.style,
-        ip_address,
-        user_agent,
-        jpeg,
-        placements: data.placements as any,
+    if (inv) {
+      verifyUrl = `${data.origin}/verification/facture/${inv.public_token}`;
+
+      // Génération du PDF signé (document original + signature + certificat)
+      const { data: items } = await supabaseAdmin
+        .from("invoice_items").select("*").eq("invoice_id", inv.id).order("position");
+      const qrMod = await import("qrcode-generator");
+      const qrcode = (qrMod as any).default ?? (qrMod as any);
+      const { buildInvoicePdf } = await import("@/lib/pdf/invoice-pdf");
+      const jpeg = base64ToBytes(data.image_base64);
+      bytes = buildInvoicePdf({
+        invoice: inv,
+        items: (items ?? []) as any[],
         verifyUrl,
-      },
-    });
+        qrcode,
+        signature: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          signature_uid,
+          signed_at,
+          method: data.method,
+          style: data.style,
+          ip_address,
+          user_agent,
+          jpeg,
+          placements: data.placements as any,
+          verifyUrl,
+        },
+      });
 
-    const filename = `${inv.number ?? "document"}-signe.pdf`;
-    const storage_path = `signatures/${inv.id}/${signature_uid}-${filename}`;
+      filename = `${inv.number ?? "document"}-signe.pdf`;
+      storage_path = `signatures/${inv.id}/${signature_uid}-${filename}`;
+    } else {
+      if (!doc?.storage_path || doc.mime_type !== "application/pdf") {
+        throw new Error("Seuls les documents PDF peuvent être signés.");
+      }
+
+      const { data: source, error: dlErr } = await supabaseAdmin.storage.from("bar-media").download(doc.storage_path);
+      if (dlErr || !source) throw new Error("Impossible de charger le document à signer.");
+      const originalBytes = new Uint8Array(await source.arrayBuffer());
+      const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+      const pdf = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
+      const pages = pdf.getPages();
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      const jpeg = await pdf.embedJpg(base64ToBytes(data.image_base64));
+
+      for (const p of data.placements as Array<{ page: number; x: number; y: number; width: number; height: number }>) {
+        const pageIdx = Math.max(0, Math.min((p.page || 1) - 1, pages.length - 1));
+        const page = pages[pageIdx];
+        if (!page) continue;
+        const w = Math.max(40, Math.min(p.width, page.getWidth()));
+        const h = Math.max(20, Math.min(p.height, page.getHeight()));
+        const x = Math.max(0, Math.min(p.x, page.getWidth() - w));
+        const y = Math.max(0, page.getHeight() - p.y - h);
+        page.drawImage(jpeg, { x, y, width: w, height: h });
+        page.drawLine({ start: { x, y: Math.max(0, y - 3) }, end: { x: x + w, y: Math.max(0, y - 3) }, thickness: 0.5, color: rgb(0.78, 0.8, 0.84) });
+        page.drawText(
+          `${data.first_name} ${data.last_name} — signe le ${new Date(signed_at).toLocaleString("fr-FR")}`,
+          { x, y: Math.max(0, y - 12), size: 6, font, color: rgb(0.42, 0.43, 0.48) },
+        );
+      }
+
+      bytes = new Uint8Array(await pdf.save());
+      filename = doc.filename;
+      storage_path = doc.storage_path;
+    }
+
     const { error: upErr } = await supabaseAdmin.storage
       .from("bar-media")
       .upload(storage_path, bytes, { contentType: "application/pdf", upsert: true });
@@ -349,7 +508,8 @@ export const submitSignature = createServerFn({ method: "POST" })
 
     const { error: sigErr } = await supabaseAdmin.from("document_signatures").insert({
       link_id: link.id,
-      invoice_id: inv.id,
+      invoice_id: inv?.id ?? null,
+      matter_document_id: doc?.id ?? null,
       signature_uid,
       first_name: data.first_name,
       last_name: data.last_name,
@@ -360,7 +520,7 @@ export const submitSignature = createServerFn({ method: "POST" })
       user_agent,
       storage_path,
       signed_at,
-    });
+    } as any);
     if (sigErr) throw new Error(sigErr.message);
 
     await supabaseAdmin
@@ -372,25 +532,45 @@ export const submitSignature = createServerFn({ method: "POST" })
       .eq("id", link.id);
 
     // Statut du document + traçabilité
-    await supabaseAdmin
-      .from("invoices")
-      .update({ status: "accepted" })
-      .eq("id", inv.id)
-      .not("status", "in", "(paid,cancelled,converted)");
+    if (inv) {
+      await supabaseAdmin
+        .from("invoices")
+        .update({ status: "accepted" })
+        .eq("id", inv.id)
+        .not("status", "in", "(paid,cancelled,converted)");
+    } else if (doc) {
+      const currentVersion = Number(doc.version ?? 1);
+      await supabaseAdmin
+        .from("matter_documents")
+        .update({
+          mime_type: "application/pdf",
+          size_bytes: bytes.length,
+          version: currentVersion + 1,
+          updated_at: new Date().toISOString(),
+          comment: `Dernière signature: ${data.first_name} ${data.last_name} (${signature_uid})`,
+        } as any)
+        .eq("id", doc.id);
+    }
 
     await supabaseAdmin.from("signature_events").insert([
       {
-        link_id: link.id, invoice_id: inv.id, type: "signed",
+        link_id: link.id,
+        invoice_id: inv?.id ?? null,
+        matter_document_id: doc?.id ?? null,
+        type: "signed",
         actor_label: `${data.first_name} ${data.last_name}`,
         metadata: { signature_uid, method: data.method, style: data.style, ip_address },
       },
       {
-        link_id: link.id, invoice_id: inv.id, type: "pdf_generated",
+        link_id: link.id,
+        invoice_id: inv?.id ?? null,
+        matter_document_id: doc?.id ?? null,
+        type: "pdf_generated",
         actor_label: "Système", metadata: { storage_path },
       },
-    ]);
+    ] as any);
 
-    if (inv.matter_id) {
+    if (inv?.matter_id) {
       await supabaseAdmin.from("matter_documents").insert({
         matter_id: inv.matter_id,
         filename,
@@ -410,20 +590,47 @@ export const submitSignature = createServerFn({ method: "POST" })
         entity_id: inv.id,
         metadata: { signature_uid, storage_path },
       });
+    } else if (doc?.matter_id) {
+      await supabaseAdmin.from("matter_activity").insert({
+        matter_id: doc.matter_id,
+        actor_id: doc.uploaded_by,
+        action: "document_signed",
+        summary: `Document ${doc.filename} signé par ${data.first_name} ${data.last_name}`,
+        entity_type: "document",
+        entity_id: doc.id,
+        metadata: { signature_uid, storage_path, replaced_in_place: true },
+      });
     }
 
-    await supabaseAdmin.from("notifications").insert({
-      user_id: inv.owner_id,
-      type: "document_signed",
-      title: "Document signé",
-      body: `${data.first_name} ${data.last_name} a signé ${inv.kind === "quote" ? "le devis" : "la facture"} ${inv.number ?? ""}.`,
-      link: `/facturation/${inv.id}`,
-      entity_type: "invoice",
-      entity_id: inv.id,
-    });
+    if (inv?.owner_id) {
+      await supabaseAdmin.from("notifications").insert({
+        user_id: inv.owner_id,
+        type: "document_signed",
+        title: "Document signé",
+        body: `${data.first_name} ${data.last_name} a signé ${inv.kind === "quote" ? "le devis" : "la facture"} ${inv.number ?? ""}.`,
+        link: `/facturation/${inv.id}`,
+        entity_type: "invoice",
+        entity_id: inv.id,
+      });
+    } else if (doc?.matters?.owner_id) {
+      await supabaseAdmin.from("notifications").insert({
+        user_id: doc.matters.owner_id,
+        type: "document_signed",
+        title: "Document signé",
+        body: `${data.first_name} ${data.last_name} a signé le document ${doc.filename}.`,
+        link: `/dossiers/${doc.matter_id}`,
+        entity_type: "document",
+        entity_id: doc.id,
+      });
+    }
+
     await supabaseAdmin.from("signature_events").insert({
-      link_id: link.id, invoice_id: inv.id, type: "notified", actor_label: "Système",
-    });
+      link_id: link.id,
+      invoice_id: inv?.id ?? null,
+      matter_document_id: doc?.id ?? null,
+      type: "notified",
+      actor_label: "Système",
+    } as any);
 
     return {
       ok: true as const,
