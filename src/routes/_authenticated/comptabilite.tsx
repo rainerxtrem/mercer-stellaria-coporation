@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -48,7 +48,6 @@ import {
   forceRefreshAccountingLast7Days,
   listAccountingAnomalies,
   listAccountingCompanies,
-  listAccountingDashboard,
   listAccountingOperations,
   setAccountingCompanyStatus,
   updateAccountingOperation,
@@ -173,14 +172,13 @@ function ComptabilitePage() {
   const deleteCompanyFn = useServerFn(deleteAccountingCompany);
   const setCompanyStatusFn = useServerFn(setAccountingCompanyStatus);
   const listOperationsFn = useServerFn(listAccountingOperations);
-  const listDashboardFn = useServerFn(listAccountingDashboard);
   const updateOperationFn = useServerFn(updateAccountingOperation);
   const listAnomaliesFn = useServerFn(listAccountingAnomalies);
   const forceRefreshFn = useServerFn(forceRefreshAccountingLast7Days);
 
   const [activeTab, setActiveTab] = useState("dashboard");
   const [companyFilter, setCompanyFilter] = useState("all");
-  const [periodDays, setPeriodDays] = useState("30");
+  const [weekFilter, setWeekFilter] = useState("all");
   const [sideFilter, setSideFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -200,7 +198,6 @@ function ComptabilitePage() {
       "accounting",
       "operations",
       companyFilter,
-      periodDays,
       sideFilter,
       statusFilter,
       search,
@@ -209,23 +206,10 @@ function ComptabilitePage() {
       listOperationsFn({
         data: {
           company_id: companyFilter === "all" ? null : companyFilter,
-          period_days: Number(periodDays),
+          period_days: null,
           side: sideFilter as any,
           status: statusFilter,
           search: search || null,
-        },
-      }),
-  });
-
-  const dashboardQ = useQuery({
-    queryKey: ["accounting", "dashboard", companyFilter, periodDays, sideFilter, statusFilter],
-    queryFn: () =>
-      listDashboardFn({
-        data: {
-          company_id: companyFilter === "all" ? null : companyFilter,
-          period_days: Number(periodDays),
-          side: sideFilter as any,
-          status: statusFilter,
         },
       }),
   });
@@ -282,7 +266,6 @@ function ComptabilitePage() {
       setOperationDialogOpen(false);
       setOperationDraft(null);
       await qc.invalidateQueries({ queryKey: ["accounting", "operations"] });
-      await qc.invalidateQueries({ queryKey: ["accounting", "dashboard"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -296,7 +279,6 @@ function ComptabilitePage() {
       toast.success(`Mise a jour forcee terminee: ${result.upserted} operations regenerees, ${result.anomalies} anomalies.${extra}`);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["accounting", "operations"] }),
-        qc.invalidateQueries({ queryKey: ["accounting", "dashboard"] }),
         qc.invalidateQueries({ queryKey: ["accounting", "anomalies"] }),
       ]);
     },
@@ -305,25 +287,69 @@ function ComptabilitePage() {
 
   const operations = (operationsQ.data ?? []) as any[];
   const operationsByWeek = useMemo(() => sortRowsByWeek(operations), [operations]);
+  const weekOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ value: string; label: string }> = [];
+    for (const row of operationsByWeek) {
+      const weekStart = getWeekStartSunday20(row.operation_date ?? row.created_at ?? null).toISOString();
+      if (seen.has(weekStart)) continue;
+      seen.add(weekStart);
+      out.push({ value: weekStart, label: weekLabelForRow(row) });
+    }
+    return out;
+  }, [operationsByWeek]);
+
+  useEffect(() => {
+    if (weekFilter === "all") return;
+    if (!weekOptions.some((week) => week.value === weekFilter)) {
+      setWeekFilter("all");
+    }
+  }, [weekFilter, weekOptions]);
+
+  const weekFilteredRows = useMemo(() => {
+    if (weekFilter === "all") return operationsByWeek;
+    return operationsByWeek.filter(
+      (row) => getWeekStartSunday20(row.operation_date ?? row.created_at ?? null).toISOString() === weekFilter,
+    );
+  }, [operationsByWeek, weekFilter]);
 
   const toClassifyRows = useMemo(
-    () => operationsByWeek.filter((row) => row.needs_classification),
-    [operationsByWeek],
+    () => weekFilteredRows.filter((row) => row.needs_classification),
+    [weekFilteredRows],
   );
-  const revenueRows = useMemo(() => operationsByWeek.filter((row) => row.entry_side === "revenue"), [operationsByWeek]);
-  const expenseRows = useMemo(() => operationsByWeek.filter((row) => row.entry_side === "expense"), [operationsByWeek]);
-  const invoiceRows = useMemo(() => operationsByWeek.filter((row) => row.invoice_number), [operationsByWeek]);
+  const revenueRows = useMemo(() => weekFilteredRows.filter((row) => row.entry_side === "revenue"), [weekFilteredRows]);
+  const expenseRows = useMemo(() => weekFilteredRows.filter((row) => row.entry_side === "expense"), [weekFilteredRows]);
+  const invoiceRows = useMemo(() => weekFilteredRows.filter((row) => row.invoice_number), [weekFilteredRows]);
 
-  const stats = dashboardQ.data ?? {
-    revenue: 0,
-    expense: 0,
-    result: 0,
-    paid_invoices: 0,
-    pending_invoices: 0,
-    overdue_invoices: 0,
-    to_classify: 0,
-    operations_total: 0,
-  };
+  const stats = useMemo(() => {
+    let revenue = 0;
+    let expense = 0;
+    let paidInvoices = 0;
+    let pendingInvoices = 0;
+    let overdueInvoices = 0;
+
+    for (const row of weekFilteredRows) {
+      const amount = Number(row.amount ?? 0);
+      if (row.entry_side === "revenue") revenue += amount;
+      if (row.entry_side === "expense") expense += amount;
+      if (row.invoice_number) {
+        if (row.status === "paid") paidInvoices += 1;
+        else if (row.status === "overdue") overdueInvoices += 1;
+        else pendingInvoices += 1;
+      }
+    }
+
+    return {
+      revenue,
+      expense,
+      result: revenue - expense,
+      paid_invoices: paidInvoices,
+      pending_invoices: pendingInvoices,
+      overdue_invoices: overdueInvoices,
+      to_classify: weekFilteredRows.filter((row) => row.needs_classification).length,
+      operations_total: weekFilteredRows.length,
+    };
+  }, [weekFilteredRows]);
 
   return (
     <section className="space-y-6">
@@ -361,14 +387,14 @@ function ComptabilitePage() {
           </div>
 
           <div className="space-y-1">
-            <Label>Période</Label>
-            <Select value={periodDays} onValueChange={setPeriodDays}>
+            <Label>Semaine</Label>
+            <Select value={weekFilter} onValueChange={setWeekFilter}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="7">7 jours</SelectItem>
-                <SelectItem value="30">30 jours</SelectItem>
-                <SelectItem value="90">90 jours</SelectItem>
-                <SelectItem value="365">12 mois</SelectItem>
+                <SelectItem value="all">Toutes les semaines</SelectItem>
+                {weekOptions.map((week) => (
+                  <SelectItem key={week.value} value={week.value}>{week.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -440,7 +466,7 @@ function ComptabilitePage() {
             </CardHeader>
             <CardContent>
               <OperationsTable
-                rows={operationsByWeek.slice(0, 12)}
+                rows={weekFilteredRows.slice(0, 12)}
                 onEdit={(row) => {
                   setOperationDraft({ ...row });
                   setOperationDialogOpen(true);
@@ -635,14 +661,14 @@ function ComptabilitePage() {
           <Card className="shadow-[var(--shadow-card)]">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base text-navy-deep">Historique complet ({operationsByWeek.length})</CardTitle>
-                <Button variant="outline" onClick={() => exportRowsCsv(operationsByWeek)} disabled={operationsByWeek.length === 0}>
+                <CardTitle className="text-base text-navy-deep">Historique complet ({weekFilteredRows.length})</CardTitle>
+                <Button variant="outline" onClick={() => exportRowsCsv(weekFilteredRows)} disabled={weekFilteredRows.length === 0}>
                   Export CSV
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <OperationsTable rows={operationsByWeek} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
+              <OperationsTable rows={weekFilteredRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
             </CardContent>
           </Card>
         </TabsContent>

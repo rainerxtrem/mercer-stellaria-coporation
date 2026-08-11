@@ -52,6 +52,131 @@ function parseDateCandidate(raw: string | null | undefined): string | null {
   return null;
 }
 
+type InvoicePrefix = "H" | "I" | "L" | "F";
+
+function normalizeText(value: string | null | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractInvoicePrefix(invoiceNumber: string | null | undefined, rawText: string): InvoicePrefix | null {
+  const fromNumber = String(invoiceNumber ?? "").match(/^\s*([HILF])\s*-/i)?.[1]?.toUpperCase();
+  if (fromNumber && ["H", "I", "L", "F"].includes(fromNumber)) {
+    return fromNumber as InvoicePrefix;
+  }
+
+  const fromText = rawText.match(/(?:facture|invoice)\s*(?:#|n[o°])?\s*([HILF])\s*-/i)?.[1]?.toUpperCase();
+  if (fromText && ["H", "I", "L", "F"].includes(fromText)) {
+    return fromText as InvoicePrefix;
+  }
+
+  return null;
+}
+
+function deriveCompanyPrefix(company: {
+  name?: string | null;
+  legal_name?: string | null;
+  company_type?: string | null;
+  internal_identifier?: string | null;
+}): InvoicePrefix | null {
+  const internal = String(company.internal_identifier ?? "").trim().toUpperCase();
+  const internalMatch = internal.match(/^([HILF])(?:\s*-.*)?$/)?.[1] ?? null;
+  if (internalMatch) return internalMatch as InvoicePrefix;
+
+  const haystack = normalizeText(
+    [company.name, company.legal_name, company.company_type].filter(Boolean).join(" "),
+  );
+
+  if (/(^|\s)(holding|corporation)(\s|$)/.test(haystack)) return "H";
+  if (/(^|\s)(insurance|assurance)(\s|$)/.test(haystack)) return "I";
+  if (/(^|\s)(law office|cabinet d avocat|cabinet avocat|cabinet)(\s|$)/.test(haystack)) return "L";
+  if (/(^|\s)(financial|finance)(\s|$)/.test(haystack)) return "F";
+
+  return null;
+}
+
+function resolveCompanyFromPrefix<T extends {
+  id: string;
+  name?: string | null;
+  legal_name?: string | null;
+  company_type?: string | null;
+  internal_identifier?: string | null;
+}>(companies: T[], prefix: InvoicePrefix | null): T | null {
+  if (!prefix) return null;
+  const candidates = companies.filter((company) => deriveCompanyPrefix(company) === prefix);
+  if (candidates.length === 1) return candidates[0];
+  return null;
+}
+
+function resolveHoldingCompany<T extends {
+  id: string;
+  name?: string | null;
+  legal_name?: string | null;
+  company_type?: string | null;
+  internal_identifier?: string | null;
+}>(companies: T[]): T | null {
+  const holdingByPrefix = companies.filter((company) => deriveCompanyPrefix(company) === "H");
+  if (holdingByPrefix.length === 1) return holdingByPrefix[0];
+
+  const exactCorporate = companies.find((company) =>
+    normalizeText(company.name).includes("mercer & stellaria corporation"),
+  );
+  if (exactCorporate) return exactCorporate;
+
+  const byName = companies.filter((company) =>
+    /(^|\s)(holding|corporation)(\s|$)/.test(normalizeText([company.name, company.legal_name].filter(Boolean).join(" "))),
+  );
+  if (byName.length === 1) return byName[0];
+
+  return null;
+}
+
+function hasClearDefinition(raw: string | null | undefined): boolean {
+  const definition = String(raw ?? "").replace(/\s+/g, " ").trim();
+  if (!definition) return false;
+  if (definition.length < 8) return false;
+
+  const letters = (definition.match(/[A-Za-zÀ-ÿ]/g) ?? []).length;
+  const digits = (definition.match(/\d/g) ?? []).length;
+  const wordsWithLetters = definition
+    .split(/\s+/)
+    .filter((part) => /[A-Za-zÀ-ÿ]/.test(part));
+
+  if (letters < 6) return false;
+  if (wordsWithLetters.length < 2) return false;
+  if (digits > 0 && letters <= digits) return false;
+
+  const compact = normalizeText(definition).replace(/[^a-z0-9]/g, "");
+  if (!compact) return false;
+  if (/^(.)\1+$/.test(compact)) return false;
+  if (/^[a-z]{1,4}\d*$/.test(compact)) return false;
+
+  return true;
+}
+
+function extractDefinitionCandidate(text: string): string | null {
+  const explicit = text.match(
+    /(?:definition|définition|objet|description|motif)\s*[:\-]\s*([^\n\r]{3,260})/i,
+  )?.[1];
+  if (explicit) return explicit.trim();
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    if (/(facture|invoice|paiement|payment)/i.test(line)) continue;
+    if (line.length >= 8) return line;
+  }
+
+  return lines[0] ?? null;
+}
+
 function classifyMessage(input: {
   content: string;
   embeds?: unknown;
@@ -69,6 +194,7 @@ function classifyMessage(input: {
   status: string;
   paymentDate: string | null;
   needsClassification: boolean;
+  invoicePrefix: InvoicePrefix | null;
 } {
   const extractEmbedText = (embed: any): string => {
     const fieldText = Array.isArray(embed?.fields)
@@ -173,8 +299,15 @@ function classifyMessage(input: {
     null;
 
   const description = text.length > 0 ? text.slice(0, 600) : null;
+  const definitionCandidate = extractDefinitionCandidate(text);
+  const invoicePrefix = extractInvoicePrefix(invoiceMatch?.[1] ?? null, text);
+  const isInvoice = Boolean(invoiceMatch?.[1]);
+  const hasDefinition = hasClearDefinition(definitionCandidate);
 
-  const needsClassification = side === "unclassified" || amount === null;
+  const needsClassification =
+    side === "unclassified" ||
+    amount === null ||
+    (isInvoice && !hasDefinition);
   const status = needsClassification ? "to_classify" : paymentDate ? "paid" : dueDate ? "pending" : "recorded";
 
   return {
@@ -190,6 +323,7 @@ function classifyMessage(input: {
     status,
     paymentDate,
     needsClassification,
+    invoicePrefix,
   };
 }
 
@@ -507,7 +641,7 @@ export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" }
         .order("occurred_at", { ascending: true }),
       supabaseAdmin
         .from("accounting_companies")
-        .select("id, name, discord_server_id, discord_channel_id")
+        .select("id, name, legal_name, company_type, internal_identifier, discord_server_id, discord_channel_id")
         .eq("firm_id", firmId)
         .eq("status", "active"),
     ]);
@@ -606,9 +740,18 @@ export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" }
     for (const event of refreshedEvents ?? events ?? []) {
       processed += 1;
       const key = `${event.discord_server_id ?? ""}:${event.discord_channel_id ?? ""}`;
-      const resolvedCompany = event.company_id
+      const classification = classifyMessage({
+        content: event.content ?? "",
+        embeds: Array.isArray(event.embeds) ? event.embeds : [],
+        occurredAt: event.occurred_at,
+      });
+
+      const resolvedFromEvent = event.company_id
         ? (companies ?? []).find((company) => company.id === event.company_id) ?? null
         : companyByDiscord.get(key) ?? null;
+      const resolvedByPrefix = resolveCompanyFromPrefix(companies ?? [], classification.invoicePrefix);
+      const resolvedHolding = resolveHoldingCompany(companies ?? []);
+      const resolvedCompany = resolvedByPrefix ?? resolvedFromEvent ?? resolvedHolding;
 
       if (!resolvedCompany) {
         anomalies += 1;
@@ -623,12 +766,6 @@ export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" }
           .eq("firm_id", firmId);
         continue;
       }
-
-      const classification = classifyMessage({
-        content: event.content ?? "",
-        embeds: Array.isArray(event.embeds) ? event.embeds : [],
-        occurredAt: event.occurred_at,
-      });
 
       const operationPayload: Record<string, unknown> = {
         firm_id: firmId,
@@ -723,6 +860,11 @@ export async function ingestAccountingDiscordWebhook(rawPayload: AccountingDisco
   const content = payload.content ?? "";
   const embeds = Array.isArray(payload.embeds) ? payload.embeds : [];
   const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
+  const classification = classifyMessage({
+    content,
+    embeds,
+    occurredAt,
+  });
 
   if (messageId) {
     const { data: existing } = await supabaseAdmin
@@ -738,23 +880,49 @@ export async function ingestAccountingDiscordWebhook(rawPayload: AccountingDisco
 
   let company: any = null;
   let companyMatchCount = 0;
+  let matchedCompanies: any[] = [];
   if (serverId && channelId) {
     const { data: companyRows, error: companyError } = await supabaseAdmin
       .from("accounting_companies")
-      .select("id, firm_id, name")
+      .select("id, firm_id, name, legal_name, company_type, internal_identifier")
       .eq("discord_server_id", serverId)
       .eq("discord_channel_id", channelId)
       .eq("status", "active");
 
     if (companyError) throw new Error(companyError.message);
-    companyMatchCount = (companyRows ?? []).length;
+    matchedCompanies = companyRows ?? [];
+    companyMatchCount = matchedCompanies.length;
 
     if (companyMatchCount === 1) {
-      company = companyRows?.[0] ?? null;
+      company = matchedCompanies[0] ?? null;
+    } else if (companyMatchCount > 1) {
+      company =
+        resolveCompanyFromPrefix(matchedCompanies, classification.invoicePrefix) ??
+        resolveHoldingCompany(matchedCompanies);
     }
   }
 
-  const firmId = explicitFirmId ?? company?.firm_id ?? null;
+  const inferredFirmId =
+    matchedCompanies.length > 0 && matchedCompanies.every((row) => row.firm_id === matchedCompanies[0]?.firm_id)
+      ? matchedCompanies[0]?.firm_id
+      : null;
+
+  const firmId = explicitFirmId ?? company?.firm_id ?? inferredFirmId ?? null;
+
+  let firmCompanies: any[] = [];
+  if (firmId) {
+    const { data: activeCompanies, error: activeCompaniesError } = await supabaseAdmin
+      .from("accounting_companies")
+      .select("id, firm_id, name, legal_name, company_type, internal_identifier")
+      .eq("firm_id", firmId)
+      .eq("status", "active");
+    if (activeCompaniesError) throw new Error(activeCompaniesError.message);
+    firmCompanies = activeCompanies ?? [];
+
+    const byPrefix = resolveCompanyFromPrefix(firmCompanies, classification.invoicePrefix);
+    const holdingFallback = resolveHoldingCompany(firmCompanies);
+    company = byPrefix ?? company ?? holdingFallback;
+  }
 
   if (!firmId) {
     const anomalyReason = companyMatchCount > 1 ? "multiple_companies_match" : "firm_not_resolved";
@@ -794,15 +962,11 @@ export async function ingestAccountingDiscordWebhook(rawPayload: AccountingDisco
     };
   }
 
-  const classification = classifyMessage({
-    content,
-    embeds,
-    occurredAt,
-  });
-
   const anomalyReason = !company
     ? companyMatchCount > 1
-      ? "multiple_companies_match"
+      ? classification.invoicePrefix
+        ? "prefix_company_not_resolved"
+        : "multiple_companies_match"
       : "company_not_found"
     : classification.needsClassification
       ? "needs_manual_classification"
