@@ -52,6 +52,25 @@ function parseDateCandidate(raw: string | null | undefined): string | null {
   return null;
 }
 
+function cleanCounterparty(raw: string | null | undefined): string | null {
+  const value = String(raw ?? "")
+    .replace(/\*/g, "")
+    .replace(/^[:\-\s]+|[:\-\s]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return value.length > 0 ? value : null;
+}
+
+function isValidInvoiceToken(value: string | null | undefined): boolean {
+  const token = String(value ?? "").trim();
+  if (token.length < 2) return false;
+  const lowered = token.toLowerCase();
+  const blocked = new Set(["de", "du", "des", "la", "le", "les", "pour", "par", "sur"]);
+  if (blocked.has(lowered)) return false;
+  if (/^[a-z]{2,3}$/i.test(token)) return false;
+  return true;
+}
+
 type InvoicePrefix = "H" | "I" | "L" | "F";
 
 function normalizeText(value: string | null | undefined): string {
@@ -292,16 +311,20 @@ function classifyMessage(input: {
   const clientNameMatch = text.match(/client\s*[\s\S]{0,60}?nom\s*:\s*([^\n\r]{2,120})/i);
   const supplierNameMatch = text.match(/(?:fournisseur|vendor|supplier)\s*[\s\S]{0,60}?nom\s*:\s*([^\n\r]{2,120})/i);
   const genericMatch = text.match(/(?:client|fournisseur|vendor|supplier)\s*[:\-]?\s*([^\n\r,;]{2,120})/i);
-  const counterparty =
+  const counterparty = cleanCounterparty(
     clientNameMatch?.[1]?.trim() ??
-    supplierNameMatch?.[1]?.trim() ??
-    genericMatch?.[1]?.trim() ??
-    null;
+      supplierNameMatch?.[1]?.trim() ??
+      genericMatch?.[1]?.trim() ??
+      null,
+  );
 
   const description = text.length > 0 ? text.slice(0, 600) : null;
   const definitionCandidate = extractDefinitionCandidate(text);
   const invoicePrefix = extractInvoicePrefix(invoiceMatch?.[1] ?? null, text);
-  const isInvoice = Boolean(invoiceMatch?.[1]);
+  const invoiceNumber = isValidInvoiceToken(invoiceMatch?.[1] ?? null)
+    ? String(invoiceMatch?.[1]).trim()
+    : null;
+  const isInvoice = Boolean(invoiceNumber);
   const hasDefinition = hasClearDefinition(definitionCandidate);
 
   const needsClassification =
@@ -313,7 +336,7 @@ function classifyMessage(input: {
   return {
     side,
     entryType,
-    invoiceNumber: invoiceMatch?.[1] ?? null,
+    invoiceNumber,
     counterparty,
     description,
     amount,
@@ -435,7 +458,7 @@ export const listAccountingOperations = createServerFn({ method: "GET" })
 
     let q = context.supabase
       .from("accounting_operations")
-      .select("id, company_id, source, discord_message_id, entry_side, entry_type, invoice_number, counterparty, description, amount, currency, operation_date, due_date, payment_date, status, needs_classification, created_at, updated_at")
+      .select("id, company_id, webhook_event_id, source, discord_message_id, entry_side, entry_type, invoice_number, counterparty, description, amount, currency, operation_date, due_date, payment_date, status, needs_classification, created_at, updated_at")
       .eq("firm_id", firmId)
       .order("operation_date", { ascending: false })
       .order("created_at", { ascending: false });
@@ -463,11 +486,36 @@ export const listAccountingOperations = createServerFn({ method: "GET" })
 
     if (error) throw new Error(error.message);
 
+    const eventIds = (rows ?? [])
+      .map((row: any) => row.webhook_event_id)
+      .filter((id: unknown): id is string => typeof id === "string" && id.length > 0);
+
+    let emitterMap = new Map<string, { author_name: string | null; occurred_at: string | null }>();
+    if (eventIds.length > 0) {
+      const { data: events, error: eventsError } = await context.supabase
+        .from("accounting_webhook_events")
+        .select("id, author_name, occurred_at")
+        .in("id", eventIds);
+      if (eventsError) throw new Error(eventsError.message);
+      emitterMap = new Map(
+        (events ?? []).map((event: any) => [
+          String(event.id),
+          {
+            author_name: event.author_name ?? null,
+            occurred_at: event.occurred_at ?? null,
+          },
+        ]),
+      );
+    }
+
     const companyMap = new Map<string, string>();
     for (const company of companies ?? []) companyMap.set(company.id, company.name);
 
     return (rows ?? []).map((row: any) => ({
       ...row,
+      counterparty: cleanCounterparty(row.counterparty),
+      emitter: emitterMap.get(String(row.webhook_event_id ?? ""))?.author_name ?? null,
+      occurred_at: emitterMap.get(String(row.webhook_event_id ?? ""))?.occurred_at ?? null,
       company_name: row.company_id ? companyMap.get(row.company_id) ?? "-" : "-",
     }));
   });

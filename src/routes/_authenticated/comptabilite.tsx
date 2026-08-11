@@ -94,6 +94,35 @@ function dateFormat(value: string | null | undefined) {
   return d.toLocaleDateString("fr-FR");
 }
 
+function dateTimeFormat(value: string | null | undefined) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function cleanDisplayText(value: string | null | undefined) {
+  const cleaned = String(value ?? "")
+    .replace(/\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.length > 0 ? cleaned : "-";
+}
+
+const STATUS_OPTIONS = [
+  { value: "to_classify", label: "À classifier" },
+  { value: "pending", label: "En attente" },
+  { value: "paid", label: "Payé" },
+  { value: "overdue", label: "En retard" },
+  { value: "recorded", label: "Enregistré" },
+];
+
 function getWeekStartSunday20(value: string | null | undefined): Date {
   const now = new Date();
   const source = value ? new Date(value) : now;
@@ -285,6 +314,21 @@ function ComptabilitePage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const updateStatusInlineMut = useMutation({
+    mutationFn: (payload: { id: string; status: string }) =>
+      updateOperationFn({
+        data: {
+          id: payload.id,
+          status: payload.status,
+          needs_classification: payload.status === "to_classify",
+        },
+      }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["accounting", "operations"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const operations = (operationsQ.data ?? []) as any[];
   const operationsByWeek = useMemo(() => sortRowsByWeek(operations), [operations]);
   const weekOptions = useMemo(() => {
@@ -471,6 +515,7 @@ function ComptabilitePage() {
                   setOperationDraft({ ...row });
                   setOperationDialogOpen(true);
                 }}
+                onStatusChange={(id, status) => updateStatusInlineMut.mutate({ id, status })}
               />
             </CardContent>
           </Card>
@@ -482,7 +527,7 @@ function ComptabilitePage() {
               <CardTitle className="text-base text-navy-deep">Opérations à classifier ({toClassifyRows.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <OperationsTable rows={toClassifyRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
+              <OperationsTable rows={toClassifyRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} onStatusChange={(id, status) => updateStatusInlineMut.mutate({ id, status })} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -491,7 +536,7 @@ function ComptabilitePage() {
           <Card className="shadow-[var(--shadow-card)]">
             <CardHeader><CardTitle className="text-base text-navy-deep">Revenus ({revenueRows.length})</CardTitle></CardHeader>
             <CardContent>
-              <OperationsTable rows={revenueRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
+              <OperationsTable rows={revenueRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} onStatusChange={(id, status) => updateStatusInlineMut.mutate({ id, status })} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -500,7 +545,7 @@ function ComptabilitePage() {
           <Card className="shadow-[var(--shadow-card)]">
             <CardHeader><CardTitle className="text-base text-navy-deep">Dépenses ({expenseRows.length})</CardTitle></CardHeader>
             <CardContent>
-              <OperationsTable rows={expenseRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
+              <OperationsTable rows={expenseRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} onStatusChange={(id, status) => updateStatusInlineMut.mutate({ id, status })} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -509,7 +554,7 @@ function ComptabilitePage() {
           <Card className="shadow-[var(--shadow-card)]">
             <CardHeader><CardTitle className="text-base text-navy-deep">Factures ({invoiceRows.length})</CardTitle></CardHeader>
             <CardContent>
-              <OperationsTable rows={invoiceRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
+              <OperationsTable rows={invoiceRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} onStatusChange={(id, status) => updateStatusInlineMut.mutate({ id, status })} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -668,7 +713,7 @@ function ComptabilitePage() {
               </div>
             </CardHeader>
             <CardContent>
-              <OperationsTable rows={weekFilteredRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
+              <OperationsTable rows={weekFilteredRows} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} onStatusChange={(id, status) => updateStatusInlineMut.mutate({ id, status })} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -840,7 +885,15 @@ function StatCard({ title, value, tone }: { title: string; value: string; tone: 
   );
 }
 
-function OperationsTable({ rows, onEdit }: { rows: any[]; onEdit: (row: any) => void }) {
+function OperationsTable({
+  rows,
+  onEdit,
+  onStatusChange,
+}: {
+  rows: any[];
+  onEdit: (row: any) => void;
+  onStatusChange: (id: string, status: string) => void;
+}) {
   return (
     <Table>
       <TableHeader>
@@ -851,6 +904,7 @@ function OperationsTable({ rows, onEdit }: { rows: any[]; onEdit: (row: any) => 
           <TableHead>Type</TableHead>
           <TableHead>Facture</TableHead>
           <TableHead>Client/Fournisseur</TableHead>
+          <TableHead>Émetteur</TableHead>
           <TableHead className="text-right">Montant</TableHead>
           <TableHead>Statut</TableHead>
           <TableHead>Source</TableHead>
@@ -861,17 +915,30 @@ function OperationsTable({ rows, onEdit }: { rows: any[]; onEdit: (row: any) => 
         {rows.map((row) => (
           <TableRow key={row.id}>
             <TableCell className="text-xs text-muted-foreground">{weekLabelForRow(row)}</TableCell>
-            <TableCell>{dateFormat(row.operation_date ?? row.created_at)}</TableCell>
+            <TableCell>{dateTimeFormat(row.occurred_at ?? row.created_at ?? row.operation_date)}</TableCell>
             <TableCell>{row.company_name ?? "-"}</TableCell>
             <TableCell>
               <Badge variant="outline">
                 {row.entry_side === "revenue" ? "Revenu" : row.entry_side === "expense" ? "Dépense" : "À classifier"}
               </Badge>
             </TableCell>
-            <TableCell className="font-mono text-xs">{row.invoice_number ?? "-"}</TableCell>
-            <TableCell>{row.counterparty ?? "-"}</TableCell>
+            <TableCell className="font-mono text-xs">{cleanDisplayText(row.invoice_number)}</TableCell>
+            <TableCell>{cleanDisplayText(row.counterparty)}</TableCell>
+            <TableCell>{cleanDisplayText(row.emitter)}</TableCell>
             <TableCell className="text-right font-medium">{money(row.amount, row.currency ?? "EUR")}</TableCell>
-            <TableCell>{row.status ?? "-"}</TableCell>
+            <TableCell>
+              <Select
+                value={row.status ?? "recorded"}
+                onValueChange={(value) => onStatusChange(String(row.id), value)}
+              >
+                <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </TableCell>
             <TableCell>{row.source ?? "manual"}</TableCell>
             <TableCell className="text-right">
               <Button size="sm" variant="outline" onClick={() => onEdit(row)}>
@@ -882,7 +949,7 @@ function OperationsTable({ rows, onEdit }: { rows: any[]; onEdit: (row: any) => 
         ))}
         {rows.length === 0 && (
           <TableRow>
-            <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
+            <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
               Aucune opération trouvée pour ces filtres.
             </TableCell>
           </TableRow>
