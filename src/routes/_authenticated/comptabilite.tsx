@@ -9,6 +9,7 @@ import {
   Calculator,
   Pencil,
   Plus,
+  RefreshCcw,
   Save,
   Trash2,
 } from "lucide-react";
@@ -44,6 +45,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   deleteAccountingCompany,
+  forceRefreshAccountingLast7Days,
   listAccountingAnomalies,
   listAccountingCompanies,
   listAccountingDashboard,
@@ -91,6 +93,38 @@ function dateFormat(value: string | null | undefined) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString("fr-FR");
+}
+
+function getWeekStartSunday20(value: string | null | undefined): Date {
+  const now = new Date();
+  const source = value ? new Date(value) : now;
+  const d = Number.isNaN(source.getTime()) ? now : source;
+
+  const weekStart = new Date(d);
+  weekStart.setHours(20, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  if (d.getTime() < weekStart.getTime()) {
+    weekStart.setDate(weekStart.getDate() - 7);
+  }
+  return weekStart;
+}
+
+function weekLabelForRow(row: any): string {
+  const start = getWeekStartSunday20(row.operation_date ?? row.created_at ?? null);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  return `${start.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} 20:00 -> ${end.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} 20:00`;
+}
+
+function sortRowsByWeek(rows: any[]): any[] {
+  return [...rows].sort((a, b) => {
+    const aStart = getWeekStartSunday20(a.operation_date ?? a.created_at ?? null).getTime();
+    const bStart = getWeekStartSunday20(b.operation_date ?? b.created_at ?? null).getTime();
+    if (aStart !== bStart) return bStart - aStart;
+    const aDate = new Date(a.operation_date ?? a.created_at ?? 0).getTime();
+    const bDate = new Date(b.operation_date ?? b.created_at ?? 0).getTime();
+    return bDate - aDate;
+  });
 }
 
 function exportRowsCsv(rows: any[]) {
@@ -142,6 +176,7 @@ function ComptabilitePage() {
   const listDashboardFn = useServerFn(listAccountingDashboard);
   const updateOperationFn = useServerFn(updateAccountingOperation);
   const listAnomaliesFn = useServerFn(listAccountingAnomalies);
+  const forceRefreshFn = useServerFn(forceRefreshAccountingLast7Days);
 
   const [activeTab, setActiveTab] = useState("dashboard");
   const [companyFilter, setCompanyFilter] = useState("all");
@@ -252,15 +287,29 @@ function ComptabilitePage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const forceRefreshMut = useMutation({
+    mutationFn: () => forceRefreshFn({ data: {} as any }),
+    onSuccess: async (result: any) => {
+      toast.success(`Mise a jour forcee terminee: ${result.upserted} operations regenerees, ${result.anomalies} anomalies.`);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["accounting", "operations"] }),
+        qc.invalidateQueries({ queryKey: ["accounting", "dashboard"] }),
+        qc.invalidateQueries({ queryKey: ["accounting", "anomalies"] }),
+      ]);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const operations = (operationsQ.data ?? []) as any[];
+  const operationsByWeek = useMemo(() => sortRowsByWeek(operations), [operations]);
 
   const toClassifyRows = useMemo(
-    () => operations.filter((row) => row.needs_classification),
-    [operations],
+    () => operationsByWeek.filter((row) => row.needs_classification),
+    [operationsByWeek],
   );
-  const revenueRows = useMemo(() => operations.filter((row) => row.entry_side === "revenue"), [operations]);
-  const expenseRows = useMemo(() => operations.filter((row) => row.entry_side === "expense"), [operations]);
-  const invoiceRows = useMemo(() => operations.filter((row) => row.invoice_number), [operations]);
+  const revenueRows = useMemo(() => operationsByWeek.filter((row) => row.entry_side === "revenue"), [operationsByWeek]);
+  const expenseRows = useMemo(() => operationsByWeek.filter((row) => row.entry_side === "expense"), [operationsByWeek]);
+  const invoiceRows = useMemo(() => operationsByWeek.filter((row) => row.invoice_number), [operationsByWeek]);
 
   const stats = dashboardQ.data ?? {
     revenue: 0,
@@ -282,9 +331,15 @@ function ComptabilitePage() {
             Gestion comptable multi-sociétés avec ingestion Discord, classification et journal auditables.
           </p>
         </div>
-        <Badge className="border-amber-500/30 bg-amber-500/10 text-amber-800">
-          Module entreprise
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => forceRefreshMut.mutate()} disabled={forceRefreshMut.isPending}>
+            <RefreshCcw className="mr-2 h-4 w-4" />
+            Mise a jour forcee
+          </Button>
+          <Badge className="border-amber-500/30 bg-amber-500/10 text-amber-800">
+            Module entreprise
+          </Badge>
+        </div>
       </div>
 
       <Card className="shadow-[var(--shadow-card)]">
@@ -382,7 +437,7 @@ function ComptabilitePage() {
             </CardHeader>
             <CardContent>
               <OperationsTable
-                rows={operations.slice(0, 12)}
+                rows={operationsByWeek.slice(0, 12)}
                 onEdit={(row) => {
                   setOperationDraft({ ...row });
                   setOperationDialogOpen(true);
@@ -577,14 +632,14 @@ function ComptabilitePage() {
           <Card className="shadow-[var(--shadow-card)]">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base text-navy-deep">Historique complet ({operations.length})</CardTitle>
-                <Button variant="outline" onClick={() => exportRowsCsv(operations)} disabled={operations.length === 0}>
+                <CardTitle className="text-base text-navy-deep">Historique complet ({operationsByWeek.length})</CardTitle>
+                <Button variant="outline" onClick={() => exportRowsCsv(operationsByWeek)} disabled={operationsByWeek.length === 0}>
                   Export CSV
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <OperationsTable rows={operations} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
+              <OperationsTable rows={operationsByWeek} onEdit={(row) => { setOperationDraft({ ...row }); setOperationDialogOpen(true); }} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -761,6 +816,7 @@ function OperationsTable({ rows, onEdit }: { rows: any[]; onEdit: (row: any) => 
     <Table>
       <TableHeader>
         <TableRow>
+          <TableHead>Semaine</TableHead>
           <TableHead>Date</TableHead>
           <TableHead>Société</TableHead>
           <TableHead>Type</TableHead>
@@ -775,6 +831,7 @@ function OperationsTable({ rows, onEdit }: { rows: any[]; onEdit: (row: any) => 
       <TableBody>
         {rows.map((row) => (
           <TableRow key={row.id}>
+            <TableCell className="text-xs text-muted-foreground">{weekLabelForRow(row)}</TableCell>
             <TableCell>{dateFormat(row.operation_date ?? row.created_at)}</TableCell>
             <TableCell>{row.company_name ?? "-"}</TableCell>
             <TableCell>
@@ -796,7 +853,7 @@ function OperationsTable({ rows, onEdit }: { rows: any[]; onEdit: (row: any) => 
         ))}
         {rows.length === 0 && (
           <TableRow>
-            <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+            <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
               Aucune opération trouvée pour ces filtres.
             </TableCell>
           </TableRow>

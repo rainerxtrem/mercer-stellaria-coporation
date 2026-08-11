@@ -446,6 +446,125 @@ export const listAccountingAnomalies = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+export const forceRefreshAccountingLast7Days = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const firmId = await requireActiveFirmId(context as Ctx);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 7);
+
+    const [{ data: events, error: eventsError }, { data: companies, error: companiesError }] = await Promise.all([
+      supabaseAdmin
+        .from("accounting_webhook_events")
+        .select("id, company_id, discord_server_id, discord_channel_id, discord_message_id, occurred_at, author_name, content, embeds, attachments, raw_payload")
+        .eq("firm_id", firmId)
+        .eq("source", "discord")
+        .gte("occurred_at", fromDate.toISOString())
+        .order("occurred_at", { ascending: true }),
+      supabaseAdmin
+        .from("accounting_companies")
+        .select("id, name, discord_server_id, discord_channel_id")
+        .eq("firm_id", firmId)
+        .eq("status", "active"),
+    ]);
+
+    if (eventsError) throw new Error(eventsError.message);
+    if (companiesError) throw new Error(companiesError.message);
+
+    const companyByDiscord = new Map<string, any>();
+    for (const company of companies ?? []) {
+      if (!company.discord_server_id || !company.discord_channel_id) continue;
+      const key = `${company.discord_server_id}:${company.discord_channel_id}`;
+      if (!companyByDiscord.has(key)) companyByDiscord.set(key, company);
+    }
+
+    let processed = 0;
+    let anomalies = 0;
+    let upserted = 0;
+
+    for (const event of events ?? []) {
+      processed += 1;
+      const key = `${event.discord_server_id ?? ""}:${event.discord_channel_id ?? ""}`;
+      const resolvedCompany = event.company_id
+        ? (companies ?? []).find((company) => company.id === event.company_id) ?? null
+        : companyByDiscord.get(key) ?? null;
+
+      if (!resolvedCompany) {
+        anomalies += 1;
+        await supabaseAdmin
+          .from("accounting_webhook_events")
+          .update({
+            company_id: null,
+            processing_status: "anomaly",
+            anomaly_reason: "company_not_found",
+          })
+          .eq("id", event.id)
+          .eq("firm_id", firmId);
+        continue;
+      }
+
+      const classification = classifyMessage({
+        content: event.content ?? "",
+        embeds: Array.isArray(event.embeds) ? event.embeds : [],
+        occurredAt: event.occurred_at,
+      });
+
+      const operationPayload: Record<string, unknown> = {
+        firm_id: firmId,
+        company_id: resolvedCompany.id,
+        webhook_event_id: event.id,
+        source: "discord",
+        discord_message_id: event.discord_message_id ?? null,
+        entry_side: classification.side,
+        entry_type: classification.entryType,
+        invoice_number: classification.invoiceNumber,
+        counterparty: classification.counterparty,
+        description: classification.description,
+        amount: classification.amount,
+        currency: classification.currency,
+        operation_date: classification.operationDate,
+        due_date: classification.dueDate,
+        payment_date: classification.paymentDate,
+        status: classification.status,
+        needs_classification: classification.needsClassification,
+        raw_payload: event.raw_payload ?? {},
+      };
+
+      const onConflict = event.discord_message_id ? "firm_id,discord_message_id" : "webhook_event_id";
+      const { error: opError } = await supabaseAdmin
+        .from("accounting_operations")
+        .upsert(operationPayload, { onConflict });
+
+      if (opError) throw new Error(opError.message);
+
+      upserted += 1;
+
+      const nextStatus = classification.needsClassification ? "anomaly" : "processed";
+      const nextReason = classification.needsClassification ? "needs_manual_classification" : null;
+      if (classification.needsClassification) anomalies += 1;
+
+      await supabaseAdmin
+        .from("accounting_webhook_events")
+        .update({
+          company_id: resolvedCompany.id,
+          processing_status: nextStatus,
+          anomaly_reason: nextReason,
+        })
+        .eq("id", event.id)
+        .eq("firm_id", firmId);
+    }
+
+    return {
+      processed,
+      anomalies,
+      upserted,
+      from: fromDate.toISOString(),
+      to: new Date().toISOString(),
+    };
+  });
+
 export type AccountingDiscordWebhookPayload = {
   firm_id?: string | null;
   server_id?: string | null;
