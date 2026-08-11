@@ -40,6 +40,7 @@ import { Route as SignalementRouteImport } from './routes/signalement'
 import { Route as VerificationRouteImport } from './routes/verification'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients'
+import { Route as AuthenticatedComptabiliteRouteImport } from './routes/_authenticated/comptabilite'
 import { Route as AuthenticatedExaminateurRouteImport } from './routes/_authenticated/examinateur'
 import { Route as AuthenticatedFormateurRouteImport } from './routes/_authenticated/formateur'
 import { Route as AuthenticatedMesDossiersDisciplinairesRouteImport } from './routes/_authenticated/mes-dossiers-disciplinaires'
@@ -89,6 +90,7 @@ import { Route as AuthenticatedFacturationIndexRouteImport } from './routes/_aut
 import { Route as AuthenticatedFacturationIdRouteImport } from './routes/_authenticated/facturation.$id'
 import { Route as AuthenticatedFormationsSlugRouteImport } from './routes/_authenticated/formations.$slug'
 import { Route as ApiAuthActionRouteImport } from './routes/api/auth.$action'
+import { Route as ApiComptabiliteDiscordWebhookRouteImport } from './routes/api/comptabilite.discord-webhook'
 import { Route as ApiStorageObjectRouteImport } from './routes/api/storage.object'
 import { Route as ApiStorageOpRouteImport } from './routes/api/storage.op'
 import { Route as ApiStorageUploadRouteImport } from './routes/api/storage.upload'
@@ -263,6 +265,12 @@ const AuthenticatedClientsRoute = AuthenticatedClientsRouteImport.update({
   path: '/clients',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedComptabiliteRoute =
+  AuthenticatedComptabiliteRouteImport.update({
+    id: '/comptabilite',
+    path: '/comptabilite',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedExaminateurRoute =
   AuthenticatedExaminateurRouteImport.update({
     id: '/examinateur',
@@ -539,6 +547,12 @@ const ApiAuthActionRoute = ApiAuthActionRouteImport.update({
   path: '/api/auth/$action',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiComptabiliteDiscordWebhookRoute =
+  ApiComptabiliteDiscordWebhookRouteImport.update({
+    id: '/api/comptabilite/discord-webhook',
+    path: '/api/comptabilite/discord-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiStorageObjectRoute = ApiStorageObjectRouteImport.update({
   id: '/api/storage/object',
   path: '/api/storage/object',
@@ -668,6 +682,7 @@ export interface FileRoutesByFullPath {
   '/verification': typeof VerificationRouteWithChildren
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/clients': typeof AuthenticatedClientsRouteWithChildren
+  '/comptabilite': typeof AuthenticatedComptabiliteRoute
   '/examinateur': typeof AuthenticatedExaminateurRoute
   '/formateur': typeof AuthenticatedFormateurRoute
   '/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
@@ -712,6 +727,7 @@ export interface FileRoutesByFullPath {
   '/facturation/$id': typeof AuthenticatedFacturationIdRoute
   '/formations/$slug': typeof AuthenticatedFormationsSlugRoute
   '/api/auth/$action': typeof ApiAuthActionRoute
+  '/api/comptabilite/discord-webhook': typeof ApiComptabiliteDiscordWebhookRoute
   '/api/storage/object': typeof ApiStorageObjectRoute
   '/api/storage/op': typeof ApiStorageOpRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
@@ -764,6 +780,7 @@ export interface FileRoutesByTo {
   '/signalement': typeof SignalementRoute
   '/verification': typeof VerificationRouteWithChildren
   '/clients': typeof AuthenticatedClientsRouteWithChildren
+  '/comptabilite': typeof AuthenticatedComptabiliteRoute
   '/examinateur': typeof AuthenticatedExaminateurRoute
   '/formateur': typeof AuthenticatedFormateurRoute
   '/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
@@ -808,6 +825,7 @@ export interface FileRoutesByTo {
   '/facturation/$id': typeof AuthenticatedFacturationIdRoute
   '/formations/$slug': typeof AuthenticatedFormationsSlugRoute
   '/api/auth/$action': typeof ApiAuthActionRoute
+  '/api/comptabilite/discord-webhook': typeof ApiComptabiliteDiscordWebhookRoute
   '/api/storage/object': typeof ApiStorageObjectRoute
   '/api/storage/op': typeof ApiStorageOpRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
@@ -863,6 +881,7 @@ export interface FileRoutesById {
   '/verification': typeof VerificationRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/clients': typeof AuthenticatedClientsRouteWithChildren
+  '/_authenticated/comptabilite': typeof AuthenticatedComptabiliteRoute
   '/_authenticated/examinateur': typeof AuthenticatedExaminateurRoute
   '/_authenticated/formateur': typeof AuthenticatedFormateurRoute
   '/_authenticated/mes-dossiers-disciplinaires': typeof AuthenticatedMesDossiersDisciplinairesRoute
@@ -907,6 +926,7 @@ export interface FileRoutesById {
   '/_authenticated/facturation/$id': typeof AuthenticatedFacturationIdRoute
   '/_authenticated/formations/$slug': typeof AuthenticatedFormationsSlugRoute
   '/api/auth/$action': typeof ApiAuthActionRoute
+  '/api/comptabilite/discord-webhook': typeof ApiComptabiliteDiscordWebhookRoute
   '/api/storage/object': typeof ApiStorageObjectRoute
   '/api/storage/op': typeof ApiStorageOpRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
@@ -963,6 +983,7 @@ export interface FileRouteTypes {
     | '/verification'
     | '/admin'
     | '/clients'
+    | '/comptabilite'
     | '/examinateur'
     | '/formateur'
     | '/mes-dossiers-disciplinaires'
@@ -1007,6 +1028,7 @@ export interface FileRouteTypes {
     | '/facturation/$id'
     | '/formations/$slug'
     | '/api/auth/$action'
+    | '/api/comptabilite/discord-webhook'
     | '/api/storage/object'
     | '/api/storage/op'
     | '/api/storage/upload'
@@ -1059,6 +1081,7 @@ export interface FileRouteTypes {
     | '/signalement'
     | '/verification'
     | '/clients'
+    | '/comptabilite'
     | '/examinateur'
     | '/formateur'
     | '/mes-dossiers-disciplinaires'
@@ -1103,6 +1126,7 @@ export interface FileRouteTypes {
     | '/facturation/$id'
     | '/formations/$slug'
     | '/api/auth/$action'
+    | '/api/comptabilite/discord-webhook'
     | '/api/storage/object'
     | '/api/storage/op'
     | '/api/storage/upload'
@@ -1157,6 +1181,7 @@ export interface FileRouteTypes {
     | '/verification'
     | '/_authenticated/admin'
     | '/_authenticated/clients'
+    | '/_authenticated/comptabilite'
     | '/_authenticated/examinateur'
     | '/_authenticated/formateur'
     | '/_authenticated/mes-dossiers-disciplinaires'
@@ -1201,6 +1226,7 @@ export interface FileRouteTypes {
     | '/_authenticated/facturation/$id'
     | '/_authenticated/formations/$slug'
     | '/api/auth/$action'
+    | '/api/comptabilite/discord-webhook'
     | '/api/storage/object'
     | '/api/storage/op'
     | '/api/storage/upload'
@@ -1259,6 +1285,7 @@ export interface RootRouteChildren {
   ApiHealthRoute: typeof ApiHealthRoute
   SignatureTokenRoute: typeof SignatureTokenRoute
   ApiAuthActionRoute: typeof ApiAuthActionRoute
+  ApiComptabiliteDiscordWebhookRoute: typeof ApiComptabiliteDiscordWebhookRoute
   ApiStorageObjectRoute: typeof ApiStorageObjectRoute
   ApiStorageOpRoute: typeof ApiStorageOpRoute
   ApiStorageUploadRoute: typeof ApiStorageUploadRoute
@@ -1484,6 +1511,13 @@ declare module '@tanstack/react-router' {
       path: '/clients'
       fullPath: '/clients'
       preLoaderRoute: typeof AuthenticatedClientsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/comptabilite': {
+      id: '/_authenticated/comptabilite'
+      path: '/comptabilite'
+      fullPath: '/comptabilite'
+      preLoaderRoute: typeof AuthenticatedComptabiliteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/examinateur': {
@@ -1829,6 +1863,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthActionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/comptabilite/discord-webhook': {
+      id: '/api/comptabilite/discord-webhook'
+      path: '/api/comptabilite/discord-webhook'
+      fullPath: '/api/comptabilite/discord-webhook'
+      preLoaderRoute: typeof ApiComptabiliteDiscordWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/storage/object': {
       id: '/api/storage/object'
       path: '/api/storage/object'
@@ -2055,6 +2096,7 @@ const AuthenticatedClientsRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
   AuthenticatedClientsRoute: typeof AuthenticatedClientsRouteWithChildren
+  AuthenticatedComptabiliteRoute: typeof AuthenticatedComptabiliteRoute
   AuthenticatedExaminateurRoute: typeof AuthenticatedExaminateurRoute
   AuthenticatedFormateurRoute: typeof AuthenticatedFormateurRoute
   AuthenticatedMesDossiersDisciplinairesRoute: typeof AuthenticatedMesDossiersDisciplinairesRoute
@@ -2084,6 +2126,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedClientsRoute: AuthenticatedClientsRouteWithChildren,
+  AuthenticatedComptabiliteRoute: AuthenticatedComptabiliteRoute,
   AuthenticatedExaminateurRoute: AuthenticatedExaminateurRoute,
   AuthenticatedFormateurRoute: AuthenticatedFormateurRoute,
   AuthenticatedMesDossiersDisciplinairesRoute:
@@ -2214,6 +2257,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHealthRoute: ApiHealthRoute,
   SignatureTokenRoute: SignatureTokenRoute,
   ApiAuthActionRoute: ApiAuthActionRoute,
+  ApiComptabiliteDiscordWebhookRoute: ApiComptabiliteDiscordWebhookRoute,
   ApiStorageObjectRoute: ApiStorageObjectRoute,
   ApiStorageOpRoute: ApiStorageOpRoute,
   ApiStorageUploadRoute: ApiStorageUploadRoute,

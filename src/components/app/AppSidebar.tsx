@@ -39,6 +39,7 @@ import {
   MessageSquare,
   CalendarDays,
   Bell,
+  Calculator,
 } from "lucide-react";
 import seal from "@/assets/seal.png";
 import { useIsBatonnier } from "@/lib/auth";
@@ -94,6 +95,7 @@ const MODULE_ICONS: Record<string, typeof Shield> = {
   DollarSign,
   ShieldAlert,
   ReceiptText,
+  Calculator,
 };
 
 export function AppSidebar({
