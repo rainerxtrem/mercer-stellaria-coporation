@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { withSession } from "@/backend/db/execute";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { logMatterActivity, withActorNames } from "@/lib/activity-log";
 import { z } from "zod";
@@ -337,16 +338,30 @@ export const finalizeDocument = createServerFn({ method: "POST" })
     size_bytes: z.number().int().nonnegative().parse(d.size_bytes),
   }))
   .handler(async ({ data, context }) => {
-    const { data: objectRow, error: objectError } = await context.supabase
-      .from("storage.objects")
-      .select("metadata")
-      .eq("bucket_id", "bar-media")
-      .eq("name", data.storage_path)
-      .maybeSingle();
-    if (objectError) throw new Error(objectError.message);
+    const objectMetadata = await withSession(
+      {
+        role: "authenticated",
+        claims: {
+          ...(context.claims ?? {}),
+          sub: context.userId,
+          role: "authenticated",
+        },
+      },
+      async (client) => {
+        const { rows } = await client.query<{ metadata: Record<string, unknown> | null }>(
+          `SELECT metadata
+             FROM storage.objects
+            WHERE bucket_id = $1
+              AND name = $2
+            LIMIT 1`,
+          ["bar-media", data.storage_path],
+        );
+        return rows[0]?.metadata ?? null;
+      },
+    );
 
-    const uploadedSize = Number((objectRow as any)?.metadata?.size ?? 0);
-    if (!objectRow || !Number.isFinite(uploadedSize) || uploadedSize <= 0) {
+    const uploadedSize = Number((objectMetadata as any)?.size ?? 0);
+    if (!objectMetadata || !Number.isFinite(uploadedSize) || uploadedSize <= 0) {
       throw new Error("Le televersement du fichier est incomplet. Reessayez l'import.");
     }
 
