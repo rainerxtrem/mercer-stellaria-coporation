@@ -82,7 +82,7 @@ const EMPTY_COMPANY: CompanyForm = {
   status: "active",
 };
 
-function money(amount: unknown, currency = "EUR") {
+function money(amount: unknown, currency = "USD") {
   const value = Number(amount ?? 0);
   return `${value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 }
@@ -116,18 +116,17 @@ function cleanDisplayText(value: string | null | undefined) {
 }
 
 const STATUS_OPTIONS = [
-  { value: "to_classify", label: "À classifier" },
+  { value: "anomaly", label: "Anomalie" },
   { value: "pending", label: "En attente" },
-  { value: "paid", label: "Payé" },
-  { value: "overdue", label: "En retard" },
-  { value: "recorded", label: "Enregistré" },
+  { value: "validated", label: "Validée" },
+  { value: "recorded", label: "Enregistrée" },
 ];
 
 function statusToneClass(status: string | null | undefined) {
-  if (status === "paid") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
-  if (status === "overdue") return "border-red-500/40 bg-red-500/10 text-red-200";
+  if (status === "validated") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (status === "anomaly") return "border-red-500/40 bg-red-500/10 text-red-200";
   if (status === "pending") return "border-amber-500/40 bg-amber-500/10 text-amber-200";
-  if (status === "to_classify") return "border-sky-500/40 bg-sky-500/10 text-sky-200";
+  if (status === "recorded") return "border-sky-500/40 bg-sky-500/10 text-sky-200";
   return "border-slate-500/40 bg-slate-500/10 text-slate-100";
 }
 
@@ -168,12 +167,11 @@ function exportRowsCsv(rows: any[]) {
     "Date",
     "Societe",
     "Type",
-    "Facture",
     "ClientFournisseur",
+    "Emetteur",
     "Montant",
     "Devise",
     "Statut",
-    "Source",
   ];
 
   const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -181,12 +179,11 @@ function exportRowsCsv(rows: any[]) {
     row.operation_date ?? row.created_at ?? "",
     row.company_name ?? "",
     row.entry_side ?? "",
-    row.invoice_number ?? "",
     row.counterparty ?? "",
+    row.emitter_name ?? row.emitter ?? "",
     row.amount ?? "",
     row.currency ?? "",
     row.status ?? "",
-    row.source ?? "",
   ].map(escape).join(","));
 
   const csv = [headers.join(","), ...lines].join("\n");
@@ -328,7 +325,7 @@ function ComptabilitePage() {
         data: {
           id: payload.id,
           status: payload.status,
-          needs_classification: payload.status === "to_classify",
+          needs_classification: payload.status === "anomaly",
         },
       }),
     onSuccess: async () => {
@@ -378,7 +375,7 @@ function ComptabilitePage() {
     let expense = 0;
     let paidInvoices = 0;
     let pendingInvoices = 0;
-    let overdueInvoices = 0;
+    let anomalyInvoices = 0;
 
     for (const row of weekFilteredRows) {
       const amount = Number(row.amount ?? 0);
@@ -386,7 +383,7 @@ function ComptabilitePage() {
       if (row.entry_side === "expense") expense += amount;
       if (row.invoice_number) {
         if (row.status === "paid") paidInvoices += 1;
-        else if (row.status === "overdue") overdueInvoices += 1;
+        else if (row.status === "anomaly") anomalyInvoices += 1;
         else pendingInvoices += 1;
       }
     }
@@ -397,7 +394,7 @@ function ComptabilitePage() {
       result: revenue - expense,
       paid_invoices: paidInvoices,
       pending_invoices: pendingInvoices,
-      overdue_invoices: overdueInvoices,
+      overdue_invoices: anomalyInvoices,
       to_classify: weekFilteredRows.filter((row) => row.needs_classification).length,
       operations_total: weekFilteredRows.length,
     };
@@ -470,11 +467,10 @@ function ComptabilitePage() {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tous</SelectItem>
-                <SelectItem value="to_classify">À classifier</SelectItem>
                 <SelectItem value="pending">En attente</SelectItem>
-                <SelectItem value="paid">Payé</SelectItem>
-                <SelectItem value="overdue">En retard</SelectItem>
-                <SelectItem value="recorded">Enregistré</SelectItem>
+                <SelectItem value="validated">Validée</SelectItem>
+                <SelectItem value="anomaly">Anomalie</SelectItem>
+                <SelectItem value="recorded">Enregistrée</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -507,9 +503,9 @@ function ComptabilitePage() {
             <StatCard title="Revenus" value={money(stats.revenue)} tone="positive" />
             <StatCard title="Dépenses" value={money(stats.expense)} tone="negative" />
             <StatCard title="Résultat" value={money(stats.result)} tone={Number(stats.result) >= 0 ? "positive" : "negative"} />
-            <StatCard title="Factures payées" value={String(stats.paid_invoices)} tone="default" />
+            <StatCard title="Factures validées" value={String(stats.paid_invoices)} tone="default" />
             <StatCard title="Factures en attente" value={String(stats.pending_invoices)} tone="default" />
-            <StatCard title="Factures en retard" value={String(stats.overdue_invoices)} tone="warning" />
+            <StatCard title="Factures en anomalie" value={String(stats.overdue_invoices)} tone="warning" />
           </div>
 
           <Card className="shadow-[var(--shadow-card)]">
@@ -838,7 +834,7 @@ function ComptabilitePage() {
               </div>
               <div className="space-y-1">
                 <Label>Devise</Label>
-                <Input value={operationDraft.currency ?? "EUR"} onChange={(event) => setOperationDraft((prev: any) => ({ ...prev, currency: event.target.value }))} />
+                <Input value={operationDraft.currency ?? "USD"} onChange={(event) => setOperationDraft((prev: any) => ({ ...prev, currency: event.target.value }))} />
               </div>
               <div className="space-y-1 md:col-span-2">
                 <Label>Description</Label>
@@ -846,7 +842,14 @@ function ComptabilitePage() {
               </div>
               <div className="space-y-1">
                 <Label>Statut</Label>
-                <Input value={operationDraft.status ?? ""} onChange={(event) => setOperationDraft((prev: any) => ({ ...prev, status: event.target.value }))} />
+                <Select value={operationDraft.status ?? "recorded"} onValueChange={(value) => setOperationDraft((prev: any) => ({ ...prev, status: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label>Classification requise</Label>
@@ -918,7 +921,6 @@ function OperationsTable({
           <TableHead>Émetteur</TableHead>
           <TableHead className="text-right">Montant</TableHead>
           <TableHead>Statut</TableHead>
-          <TableHead>Source</TableHead>
           <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
@@ -935,7 +937,7 @@ function OperationsTable({
             </TableCell>
             <TableCell>{cleanDisplayText(row.counterparty)}</TableCell>
             <TableCell>{cleanDisplayText(row.emitter_name ?? row.emitter)}</TableCell>
-            <TableCell className="text-right font-medium">{money(row.amount, row.currency ?? "EUR")}</TableCell>
+            <TableCell className="text-right font-medium">{money(row.amount, row.currency ?? "USD")}</TableCell>
             <TableCell>
               <Select
                 value={row.status ?? "recorded"}
@@ -949,7 +951,6 @@ function OperationsTable({
                 </SelectContent>
               </Select>
             </TableCell>
-            <TableCell>{row.source ?? "manual"}</TableCell>
             <TableCell className="text-right">
               <Button size="sm" variant="outline" onClick={() => onEdit(row)}>
                 <Pencil className="mr-1 h-3.5 w-3.5" />Modifier
@@ -959,7 +960,7 @@ function OperationsTable({
         ))}
         {rows.length === 0 && (
           <TableRow>
-            <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
+            <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
               Aucune opération trouvée pour ces filtres.
             </TableCell>
           </TableRow>

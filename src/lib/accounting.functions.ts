@@ -61,6 +61,18 @@ function cleanCounterparty(raw: string | null | undefined): string | null {
   return value.length > 0 ? value : null;
 }
 
+function normalizeAccountingStatus(
+  status: string | null | undefined,
+  needsClassification = false,
+): "anomaly" | "pending" | "validated" | "recorded" {
+  const normalized = normalizeText(status);
+  if (needsClassification) return "anomaly";
+  if (["anomaly", "to classify", "to_classify", "overdue"].includes(normalized)) return "anomaly";
+  if (["pending", "en attente"].includes(normalized)) return "pending";
+  if (["paid", "validated", "validee", "validée"].includes(normalized)) return "validated";
+  return "recorded";
+}
+
 function isLikelyLogLabel(value: string | null | undefined): boolean {
   const v = normalizeText(value);
   if (!v) return false;
@@ -68,13 +80,16 @@ function isLikelyLogLabel(value: string | null | undefined): boolean {
 }
 
 function extractHumanEmitter(description: string | null | undefined): string | null {
-  const text = cleanCounterparty(description);
-  if (!text) return null;
+  const raw = String(description ?? "");
+  if (!raw.trim()) return null;
 
   const employeeBlock = cleanCounterparty(
-    text.match(/(?:employe|employé)\s*[\s\S]{0,120}?nom\s*:\s*([^\n\r]{2,120})/i)?.[1] ?? null,
+    raw.match(/(?:employe|employé)\s*[\s\S]{0,180}?\*{0,2}nom\*{0,2}\s*:\s*([^\n\r]{2,120})/i)?.[1] ?? null,
   );
   if (employeeBlock && !isLikelyLogLabel(employeeBlock)) return employeeBlock;
+
+  const text = cleanCounterparty(raw);
+  if (!text) return null;
 
   const patterns = [
     /^([^\n\r]{2,120}?)\s+a\s+pay[ée]e?\s+une\s+facture/i,
@@ -366,7 +381,7 @@ function classifyMessage(input: {
     side === "unclassified" ||
     amount === null ||
     (isInvoice && !hasDefinition);
-  const status = needsClassification ? "to_classify" : paymentDate ? "paid" : dueDate ? "pending" : "recorded";
+  const status = needsClassification ? "anomaly" : paymentDate ? "validated" : dueDate ? "pending" : "recorded";
 
   return {
     side,
@@ -551,11 +566,12 @@ export const listAccountingOperations = createServerFn({ method: "GET" })
       ...row,
       counterparty: cleanCounterparty(row.counterparty),
       emitter:
-        cleanCounterparty(row.emitter_name) ??
         extractHumanEmitter(row.description) ??
+        cleanCounterparty(row.emitter_name) ??
         (isLikelyLogLabel(emitterMap.get(String(row.webhook_event_id ?? ""))?.author_name)
           ? null
           : emitterMap.get(String(row.webhook_event_id ?? ""))?.author_name ?? null),
+      status: normalizeAccountingStatus(row.status, Boolean(row.needs_classification)),
       occurred_at: emitterMap.get(String(row.webhook_event_id ?? ""))?.occurred_at ?? null,
       company_name: row.company_id ? companyMap.get(row.company_id) ?? "-" : "-",
     }));
@@ -603,9 +619,10 @@ export const listAccountingDashboard = createServerFn({ method: "GET" })
       if (row.entry_side === "revenue") revenue += amount;
       if (row.entry_side === "expense") expense += amount;
       if (row.invoice_number) {
-        if (row.status === "paid") paidInvoices += 1;
-        else if (row.status === "overdue") overdueInvoices += 1;
-        else pendingInvoices += 1;
+        const normalizedStatus = normalizeAccountingStatus(row.status, Boolean(row.needs_classification));
+        if (normalizedStatus === "validated") paidInvoices += 1;
+        else if (normalizedStatus === "anomaly") overdueInvoices += 1;
+        else if (normalizedStatus === "pending") pendingInvoices += 1;
       }
     }
 
