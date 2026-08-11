@@ -211,7 +211,7 @@ export const listMatterTree = createServerFn({ method: "GET" })
       context.supabase
         .from("signature_links")
         .select("matter_document_id, signed_at")
-        .eq("active", true)
+        .not("signed_at", "is", null)
         .not("matter_document_id", "is", null),
     ]);
 
