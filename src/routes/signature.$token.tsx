@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import logo from "@/assets/ms-logo.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,13 +15,18 @@ import { CheckCircle2, Download, Loader2, PenLine, ShieldCheck, Trash2, XCircle 
 export const Route = createFileRoute("/signature/$token")({
   head: () => ({
     meta: [
-      { title: "Signature électronique — Mercer & Stellaria Corporation" },
-      { name: "description", content: "Consultez et signez électroniquement votre devis ou facture en toute sécurité." },
+      { title: "Signature électronique sécurisée — Mercer & Stellaria Corporation" },
+      { name: "description", content: "Signez vos documents Mercer & Stellaria Corporation en ligne, de manière sécurisée et sans créer de compte." },
       { name: "robots", content: "noindex,nofollow" },
-      { property: "og:title", content: "Signature électronique sécurisée" },
-      { property: "og:description", content: "Signez votre document du Mercer & Stellaria Corporation." },
+      { property: "og:title", content: "Signature électronique sécurisée — Mercer & Stellaria Corporation" },
+      { property: "og:description", content: "Signez vos documents en ligne avec Mercer & Stellaria Corporation." },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      { property: "og:image", content: logo },
+      { property: "og:image:alt", content: "Logo Mercer & Stellaria Corporation" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Signature électronique sécurisée — Mercer & Stellaria Corporation" },
+      { name: "twitter:description", content: "Signez vos documents en ligne avec Mercer & Stellaria Corporation." },
+      { name: "twitter:image", content: logo },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
