@@ -6,7 +6,9 @@ import { PageHeader } from "@/components/site/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   getMatter,
   updateMatter,
@@ -25,7 +27,7 @@ import {
   listMatterAssistants, addMatterAssistant, removeMatterAssistant,
   listTasks, createTask, updateTask, deleteTask,
 } from "@/lib/assistant.functions";
-import { createMatterDocumentSignatureLink } from "@/lib/signature.functions";
+import { createMatterDocumentSignatureLink, listMatterDocumentSignatureLinks } from "@/lib/signature.functions";
 import { listInvoices } from "@/lib/invoices.functions";
 import { toast } from "sonner";
 import {
@@ -82,6 +84,7 @@ function Page() {
   const taskUpdateFn = useServerFn(updateTask);
   const taskDeleteFn = useServerFn(deleteTask);
   const signDocLinkFn = useServerFn(createMatterDocumentSignatureLink);
+  const listDocSignatureLinksFn = useServerFn(listMatterDocumentSignatureLinks);
   const session = useSession();
   const uid = session?.user.id;
 
@@ -146,6 +149,8 @@ function Page() {
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [signatureDialogDoc, setSignatureDialogDoc] = useState<Doc | null>(null);
+  const [signersCount, setSignersCount] = useState("1");
 
   const folders: Folder[] = tree.data?.folders ?? [];
   const documents: Doc[] = tree.data?.documents ?? [];
@@ -208,19 +213,48 @@ function Page() {
       data: {
         document_id: documentId,
         origin: window.location.origin,
+        signers_count: Math.max(1, Math.min(25, Number(signersCount || "1"))),
       },
     }),
     onSuccess: async (res: any) => {
+      const firstLink = res?.links?.[0]?.url;
       try {
-        await navigator.clipboard.writeText(String(res.url));
-        toast.success("Lien de signature créé et copié");
+        if (firstLink) {
+          await navigator.clipboard.writeText(String(firstLink));
+          toast.success("Liens de signature créés, premier lien copié");
+        } else {
+          toast.success("Liens de signature créés");
+        }
       } catch {
-        toast.success("Lien de signature créé");
+        toast.success("Liens de signature créés");
       }
-      window.open(String(res.url), "_blank", "noopener,noreferrer");
+      invalidate();
+      if (signatureDialogDoc) {
+        qc.invalidateQueries({ queryKey: ["matter-doc-sign-links", signatureDialogDoc.id] });
+      }
     },
     onError: (e: any) => toast.error(e.message ?? "Impossible de créer le lien de signature"),
   });
+
+  const signLinks = useQuery({
+    queryKey: ["matter-doc-sign-links", signatureDialogDoc?.id],
+    enabled: Boolean(signatureDialogDoc?.id),
+    queryFn: () => listDocSignatureLinksFn({
+      data: {
+        document_id: String(signatureDialogDoc?.id),
+        origin: window.location.origin,
+      },
+    }),
+  });
+
+  const copySignatureLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Lien copié");
+    } catch {
+      toast.error("Copie impossible");
+    }
+  };
 
   async function uploadFile(file: File) {
     try {
@@ -433,7 +467,10 @@ function Page() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => signDoc.mutate(d.id)}
+                                  onClick={() => {
+                                    setSignatureDialogDoc(d);
+                                    setSignersCount("1");
+                                  }}
                                   disabled={signDoc.isPending}
                                 >
                                   <FileSignature className="mr-1.5 h-4 w-4" />Faire signer
@@ -632,6 +669,98 @@ function Page() {
           </TabsContent>
         </Tabs>
       </section>
+
+      <Dialog
+        open={Boolean(signatureDialogDoc)}
+        onOpenChange={(open) => {
+          if (!open) setSignatureDialogDoc(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Liens de signature</DialogTitle>
+            <DialogDescription>
+              {signatureDialogDoc
+                ? `Document : ${signatureDialogDoc.filename}`
+                : "Générez un ou plusieurs liens de signature."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div>
+              <Label htmlFor="signers-count">Nombre de signataires (1 à 25)</Label>
+              <Input
+                id="signers-count"
+                value={signersCount}
+                onChange={(e) => setSignersCount(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                placeholder="1"
+                inputMode="numeric"
+              />
+            </div>
+            <Button
+              className="bg-navy text-white hover:bg-navy-deep"
+              disabled={!signatureDialogDoc || signDoc.isPending}
+              onClick={() => {
+                if (!signatureDialogDoc) return;
+                const n = Math.max(1, Math.min(25, Number(signersCount || "1")));
+                signDoc.mutate(signatureDialogDoc.id);
+                if (String(n) !== signersCount) setSignersCount(String(n));
+              }}
+            >
+              <FileSignature className="mr-1.5 h-4 w-4" />Générer les liens
+            </Button>
+          </div>
+
+          <div className="max-h-[380px] space-y-3 overflow-auto pr-1">
+            {signLinks.isLoading ? (
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                Chargement des liens…
+              </div>
+            ) : ((signLinks.data as any)?.batches ?? []).length === 0 ? (
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                Aucun lien généré pour ce document.
+              </div>
+            ) : (
+              (((signLinks.data as any)?.batches ?? []) as any[]).map((batch) => {
+                const isDone = batch.status === "signed";
+                return (
+                  <div key={batch.group_token} className="rounded-md border border-border p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 font-semibold ${isDone ? "bg-success/15 text-success" : "bg-amber-100 text-amber-900"}`}>
+                        {isDone ? "Signé" : "En cours"}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {batch.signed_count}/{batch.signers_total} signatures · créé le {new Date(batch.created_at).toLocaleString("fr-FR")}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(batch.links as any[]).map((link) => (
+                        <div key={link.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/20 p-2 text-xs">
+                          <span className="font-semibold">Signataire {link.signer_index}</span>
+                          <span className="text-muted-foreground">
+                            {link.signed_at
+                              ? `Signé le ${new Date(link.signed_at).toLocaleString("fr-FR")}`
+                              : "En attente de signature"}
+                          </span>
+                          <div className="ml-auto flex items-center gap-2">
+                            <Button size="sm" variant="outline" onClick={() => void copySignatureLink(String(link.url))}>Copier</Button>
+                            <Button size="sm" variant="ghost" onClick={() => window.open(String(link.url), "_blank", "noopener,noreferrer")}>Ouvrir</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSignatureDialogDoc(null)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -56,7 +56,7 @@ function SignaturePage() {
   const [pages, setPages] = useState<{ width: number; height: number }[]>([]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [method, setMethod] = useState<"drawn" | "generated">("drawn");
+  const [method, setMethod] = useState<"drawn" | "generated" | "uploaded">("drawn");
   const [style, setStyle] = useState(STYLES[0]!.id);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
@@ -172,7 +172,7 @@ function SignaturePage() {
         origin,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        method,
+        method: method === "uploaded" ? "drawn" : method,
         style: method === "generated" ? style : null,
         image_base64: jpeg,
         placements: placements.map((p) => ({
@@ -185,7 +185,11 @@ function SignaturePage() {
       };
       const r: any = await submitFn({ data: payload });
       setResult(r);
-      toast.success("Document signé");
+      if (r?.fully_signed === false) {
+        toast.success(`Signature enregistrée (${r?.signed_count ?? 0}/${r?.signers_total ?? 1}). En attente des autres signataires.`);
+      } else {
+        toast.success("Document signé");
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Signature impossible");
     } finally {
@@ -433,8 +437,8 @@ function SignatureDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  method: "drawn" | "generated";
-  setMethod: (m: "drawn" | "generated") => void;
+  method: "drawn" | "generated" | "uploaded";
+  setMethod: (m: "drawn" | "generated" | "uploaded") => void;
   style: string;
   setStyle: (s: string) => void;
   fullName: string;
@@ -443,6 +447,8 @@ function SignatureDialog({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const dirty = useRef(false);
+  const [uploadedDataUrl, setUploadedDataUrl] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string>("");
 
   const clear = () => {
     const canvas = canvasRef.current;
@@ -453,7 +459,14 @@ function SignatureDialog({
     dirty.current = false;
   };
 
-  useEffect(() => { if (open && method === "drawn") setTimeout(clear, 30); }, [open, method]);
+  useEffect(() => {
+    if (!open) {
+      setUploadedDataUrl(null);
+      setUploadedFileName("");
+      return;
+    }
+    if (method === "drawn") setTimeout(clear, 30);
+  }, [open, method]);
 
   const pos = (e: React.PointerEvent) => {
     const canvas = canvasRef.current!;
@@ -465,6 +478,11 @@ function SignatureDialog({
     if (method === "drawn") {
       if (!dirty.current) return;
       onConfirm(canvasRef.current!.toDataURL("image/jpeg", 0.95));
+      return;
+    }
+    if (method === "uploaded") {
+      if (!uploadedDataUrl) return;
+      onConfirm(uploadedDataUrl);
       return;
     }
     const font = STYLES.find((s) => s.id === style)?.font ?? "cursive";
@@ -482,6 +500,25 @@ function SignatureDialog({
     onConfirm(canvas.toDataURL("image/jpeg", 0.95));
   };
 
+  const uploadSignatureImage = async (file: File | null) => {
+    if (!file) return;
+    const mime = (file.type || "").toLowerCase();
+    const validMime = mime === "image/png" || mime === "image/jpeg";
+    const validExt = /\.(png|jpe?g)$/i.test(file.name);
+    if (!validMime && !validExt) {
+      toast.error("Format non supporté. Utilisez uniquement PNG ou JPG.");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Lecture impossible"));
+      reader.readAsDataURL(file);
+    });
+    setUploadedDataUrl(dataUrl);
+    setUploadedFileName(file.name);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
@@ -489,10 +526,11 @@ function SignatureDialog({
           <DialogTitle>Votre signature</DialogTitle>
           <DialogDescription>Dessinez votre signature ou générez-la à partir de votre nom.</DialogDescription>
         </DialogHeader>
-        <Tabs value={method} onValueChange={(v) => setMethod(v as "drawn" | "generated")}>
+        <Tabs value={method} onValueChange={(v) => setMethod(v as "drawn" | "generated" | "uploaded")}>
           <TabsList className="w-full">
             <TabsTrigger value="drawn" className="flex-1">Dessiner</TabsTrigger>
             <TabsTrigger value="generated" className="flex-1">Générer</TabsTrigger>
+            <TabsTrigger value="uploaded" className="flex-1">Importer</TabsTrigger>
           </TabsList>
           <TabsContent value="drawn" className="mt-4">
             <canvas
@@ -541,6 +579,28 @@ function SignatureDialog({
                 <span className="text-xs text-muted-foreground">{s.label}</span>
               </button>
             ))}
+          </TabsContent>
+          <TabsContent value="uploaded" className="mt-4 space-y-3">
+            <div className="rounded-md border border-dashed border-border/70 bg-muted/20 p-3">
+              <Label htmlFor="signature-image-upload" className="text-xs text-muted-foreground">
+                Importez une image de signature (PNG ou JPG uniquement)
+              </Label>
+              <Input
+                id="signature-image-upload"
+                type="file"
+                accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                className="mt-2"
+                onChange={(e) => void uploadSignatureImage(e.target.files?.[0] ?? null)}
+              />
+              {uploadedFileName && (
+                <p className="mt-2 text-xs text-muted-foreground">Fichier chargé : {uploadedFileName}</p>
+              )}
+              {uploadedDataUrl && (
+                <div className="mt-3 rounded-md border border-border/60 bg-white p-3">
+                  <img src={uploadedDataUrl} alt="Aperçu signature importée" className="mx-auto h-20 object-contain" />
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
         <DialogFooter>

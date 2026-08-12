@@ -205,20 +205,51 @@ export const listMatterTree = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { matter_id: string }) => ({ matter_id: z.string().uuid().parse(d.matter_id) }))
   .handler(async ({ data, context }) => {
-    const [{ data: folders }, { data: documents }, { data: signedLinks }] = await Promise.all([
+    const [{ data: folders }, { data: documents }] = await Promise.all([
       context.supabase.from("matter_folders").select("*").eq("matter_id", data.matter_id).order("name"),
       context.supabase.from("matter_documents").select("*").eq("matter_id", data.matter_id).order("filename"),
-      context.supabase
-        .from("signature_links")
-        .select("matter_document_id, signed_at")
-        .not("signed_at", "is", null)
-        .not("matter_document_id", "is", null),
     ]);
 
+    const docIds = (documents ?? []).map((d: any) => String(d.id));
+    const [{ data: links }, { data: signatures }] = docIds.length > 0
+      ? await Promise.all([
+        context.supabase
+          .from("signature_links")
+          .select("id, matter_document_id, group_token, signers_total, signer_index")
+          .in("matter_document_id", docIds),
+        context.supabase
+          .from("document_signatures")
+          .select("id, link_id")
+          .in("matter_document_id", docIds),
+      ])
+      : [{ data: [] as any[] }, { data: [] as any[] }];
+
+    const signedLinkIds = new Set<string>((signatures ?? []).map((s: any) => String(s.link_id)));
+    const byDocAndGroup = new Map<string, { signers_total: number; signed_count: number }>();
+
+    for (const raw of links ?? []) {
+      const link: any = raw;
+      const docId = String(link.matter_document_id ?? "");
+      if (!docId) continue;
+      const groupToken = String(link.group_token ?? link.id);
+      const key = `${docId}:${groupToken}`;
+      if (!byDocAndGroup.has(key)) {
+        byDocAndGroup.set(key, {
+          signers_total: Math.max(1, Number(link.signers_total ?? 1)),
+          signed_count: 0,
+        });
+      }
+      const entry = byDocAndGroup.get(key)!;
+      entry.signers_total = Math.max(entry.signers_total, Number(link.signers_total ?? 1));
+      if (signedLinkIds.has(String(link.id))) {
+        entry.signed_count += 1;
+      }
+    }
+
     const signedDocIds = new Set<string>();
-    for (const link of signedLinks ?? []) {
-      if (link?.matter_document_id && link?.signed_at) {
-        signedDocIds.add(String(link.matter_document_id));
+    for (const [key, stats] of byDocAndGroup.entries()) {
+      if (stats.signed_count >= stats.signers_total) {
+        signedDocIds.add(key.split(":", 1)[0]!);
       }
     }
 
