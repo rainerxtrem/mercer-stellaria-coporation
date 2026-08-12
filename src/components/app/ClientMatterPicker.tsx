@@ -97,7 +97,6 @@ export function ClientMatterPicker({
               {selectedClient ? (
                 <span className="truncate">
                   {selectedClient.last_name.toUpperCase()} {selectedClient.first_name}
-                  {selectedClient.email ? <span className="ml-2 text-xs text-muted-foreground">· {selectedClient.email}</span> : null}
                 </span>
               ) : (
                 <span className="text-muted-foreground">Sélectionner un client existant…</span>
@@ -112,7 +111,7 @@ export function ClientMatterPicker({
                 return val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
               }}
             >
-              <CommandInput placeholder="Rechercher par nom, prénom, email…" />
+              <CommandInput placeholder="Rechercher par nom, prénom, téléphone…" />
               <CommandList>
                 <CommandEmpty>Aucun client trouvé.</CommandEmpty>
                 <CommandGroup>
@@ -127,7 +126,7 @@ export function ClientMatterPicker({
                         <Check className={cn("mr-2 h-4 w-4", value.client_id === c.id ? "opacity-100" : "opacity-0")} />
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-medium">{c.last_name.toUpperCase()} {c.first_name}</div>
-                          {c.email && <div className="truncate text-xs text-muted-foreground">{c.email}</div>}
+                          {c.phone && <div className="truncate text-xs text-muted-foreground">{c.phone}</div>}
                         </div>
                       </CommandItem>
                     );
