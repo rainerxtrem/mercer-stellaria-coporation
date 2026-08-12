@@ -66,7 +66,7 @@ export function getDiscordConfig() {
   const baseUrl = (process.env.APP_BASE_URL ?? process.env.PUBLIC_SITE_URL ?? "http://localhost:8080").replace(/\/$/, "");
   const defaultRedirect = `${baseUrl}/api/auth/discord/callback`;
   const redirectUri = normalizeRedirectUri(process.env.DISCORD_REDIRECT_URI ?? defaultRedirect);
-  const scopes = (process.env.DISCORD_OAUTH_SCOPES ?? "identify guilds messages.read").trim();
+  const scopes = (process.env.DISCORD_OAUTH_SCOPES ?? "identify guilds guilds.members.read").trim();
 
   return { clientId, clientSecret, guildId, redirectUri, scopes };
 }
