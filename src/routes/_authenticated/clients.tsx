@@ -23,7 +23,6 @@ type ClientRow = {
   id?: string;
   first_name: string;
   last_name: string;
-  email: string;
   phone: string;
   address: string;
   birth_date: string;
@@ -33,7 +32,6 @@ type ClientRow = {
 const empty: ClientRow = {
   first_name: "",
   last_name: "",
-  email: "",
   phone: "",
   address: "",
   birth_date: "",
@@ -56,7 +54,6 @@ function Page() {
       id: v.id,
       first_name: v.first_name.trim(),
       last_name: v.last_name.trim(),
-      email: v.email.trim() || null,
       phone: v.phone.trim() || null,
       address: v.address.trim() || null,
       birth_date: v.birth_date || null,
@@ -83,7 +80,6 @@ function Page() {
       id: c.id,
       first_name: c.first_name ?? "",
       last_name: c.last_name ?? "",
-      email: c.email ?? "",
       phone: c.phone ?? "",
       address: c.address ?? "",
       birth_date: c.birth_date ?? "",
@@ -108,7 +104,6 @@ function Page() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nom</TableHead>
-                    <TableHead>Email</TableHead>
                     <TableHead>ID unique</TableHead>
                     <TableHead>Téléphone</TableHead>
                     <TableHead>Adresse</TableHead>
@@ -119,7 +114,6 @@ function Page() {
                   {(clients.data ?? []).map((c: any) => (
                     <TableRow key={c.id}>
                       <TableCell className="font-medium">{c.last_name.toUpperCase()} {c.first_name}</TableCell>
-                      <TableCell>{c.email ?? "—"}</TableCell>
                       <TableCell>{c.portal_unique_id ?? "—"}</TableCell>
                       <TableCell>{c.phone ?? "—"}</TableCell>
                       <TableCell className="max-w-xs truncate">{c.address ?? "—"}</TableCell>
@@ -132,7 +126,7 @@ function Page() {
                     </TableRow>
                   ))}
                   {(clients.data ?? []).length === 0 && !clients.isLoading && (
-                    <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Aucun client enregistré.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Aucun client enregistré.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -151,7 +145,6 @@ function Page() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div><Label>Prénom *</Label><Input value={editing.first_name} onChange={(e) => setEditing({ ...editing, first_name: e.target.value })} /></div>
             <div><Label>Nom *</Label><Input value={editing.last_name} onChange={(e) => setEditing({ ...editing, last_name: e.target.value })} /></div>
-            <div><Label>Email</Label><Input type="email" value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></div>
             <div><Label>Téléphone</Label><Input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></div>
             <div><Label>ID unique</Label><Input value={editing.portal_unique_id} onChange={(e) => setEditing({ ...editing, portal_unique_id: e.target.value })} /></div>
             <div className="sm:col-span-2"><Label>Adresse</Label><Input value={editing.address} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></div>

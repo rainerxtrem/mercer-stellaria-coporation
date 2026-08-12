@@ -12,7 +12,7 @@ import { getClient } from "@/lib/clients.functions";
 import { listInvoices } from "@/lib/invoices.functions";
 import { linkClientDiscord, setClientDiscordChannel, unlinkClientDiscord } from "@/lib/client-accounts.functions";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Folder, FileSignature, Receipt, Mail, Phone } from "lucide-react";
+import { ArrowLeft, ExternalLink, Folder, FileSignature, Receipt, Phone } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/clients/$id")({
   head: () => ({ meta: [{ title: "Fiche client — Mercer & Stellaria Corporation" }] }),
@@ -93,7 +93,6 @@ function Page() {
       <PageHeader
         eyebrow="Client"
         title={c ? `${(c.last_name ?? "").toUpperCase()} ${c.first_name ?? ""}`.trim() : "Chargement…"}
-        description={c?.email ?? undefined}
       >
         <Button variant="outline" size="sm" onClick={() => navigate({ to: "/clients" })} className="border-white text-white hover:bg-white hover:text-navy">
           <ArrowLeft className="mr-1.5 h-4 w-4" />Retour
@@ -104,7 +103,6 @@ function Page() {
         {c && (
           <Card className="shadow-[var(--shadow-card)]">
             <CardContent className="p-6 grid gap-3 sm:grid-cols-2 text-sm">
-              {c.email && <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />{c.email}</div>}
               {c.phone && <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" />{c.phone}</div>}
               {c.address && <div className="sm:col-span-2 text-muted-foreground">{c.address}</div>}
               {c.notes && <div className="sm:col-span-2 whitespace-pre-line text-muted-foreground">{c.notes}</div>}
