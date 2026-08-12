@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { buildDiscordAuthorizeUrl } from "@/backend/auth/discord";
+import { buildDiscordAuthorizeUrl, getDiscordConfig } from "@/backend/auth/discord";
 
 const OAUTH_COOKIE = "sba_discord_oauth_callback";
 
@@ -26,7 +26,8 @@ export const Route = createFileRoute("/api/auth/discord/start")({
       GET: async ({ request }) => {
         const url = new URL(request.url);
         const redirectTo = sanitizeRedirect(url.searchParams.get("redirect_to"));
-        const callbackUri = `${url.origin}/api/auth/discord/callback`;
+        const cfg = getDiscordConfig();
+        const callbackUri = cfg.redirectUri;
 
         const state = crypto.randomUUID();
         const location = buildDiscordAuthorizeUrl(state, callbackUri);
