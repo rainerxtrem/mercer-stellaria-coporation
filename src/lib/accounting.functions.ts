@@ -131,19 +131,25 @@ function normalizeText(value: string | null | undefined): string {
 }
 
 function extractInvoicePrefix(invoiceNumber: string | null | undefined, rawText: string): InvoicePrefix | null {
+  const normalizedRaw = String(rawText ?? "")
+    .replace(/\*+/g, " ")
+    .replace(/[_`~]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
   const fromNumber = String(invoiceNumber ?? "").match(/^\s*([HILF])\s*-/i)?.[1]?.toUpperCase();
   if (fromNumber && ["H", "I", "L", "F"].includes(fromNumber)) {
     return fromNumber as InvoicePrefix;
   }
 
-  const fromTitle = rawText.match(
+  const fromTitle = normalizedRaw.match(
     /(?:titre|title|objet|subject|libelle|libellé)\s*:\s*([HILF])\s*-/i,
   )?.[1]?.toUpperCase();
   if (fromTitle && ["H", "I", "L", "F"].includes(fromTitle)) {
     return fromTitle as InvoicePrefix;
   }
 
-  const fromText = rawText.match(/(?:facture|invoice)\s*(?:#|n[o°])?\s*([HILF])\s*-/i)?.[1]?.toUpperCase();
+  const fromText = normalizedRaw.match(/(?:facture|invoice)\s*(?:#|n[o°])?\s*([HILF])\s*-/i)?.[1]?.toUpperCase();
   if (fromText && ["H", "I", "L", "F"].includes(fromText)) {
     return fromText as InvoicePrefix;
   }
@@ -161,14 +167,17 @@ function deriveCompanyPrefix(company: {
   const internalMatch = internal.match(/^([HILF])(?:\s*-.*)?$/)?.[1] ?? null;
   if (internalMatch) return internalMatch as InvoicePrefix;
 
-  const haystack = normalizeText(
-    [company.name, company.legal_name, company.company_type].filter(Boolean).join(" "),
-  );
+  const nameHaystack = normalizeText(company.name);
+  const typeHaystack = normalizeText(company.company_type);
+  const legalHaystack = normalizeText(company.legal_name);
 
-  if (/(^|\s)(holding|corporation)(\s|$)/.test(haystack)) return "H";
-  if (/(^|\s)(insurance|assurance)(\s|$)/.test(haystack)) return "I";
-  if (/(^|\s)(law office|cabinet d avocat|cabinet avocat|cabinet)(\s|$)/.test(haystack)) return "L";
-  if (/(^|\s)(financial|finance)(\s|$)/.test(haystack)) return "F";
+  // Match operational entities first to avoid legal-name collisions with "corporation".
+  if (/(^|\s)(insurance|assurance)(\s|$)/.test(`${nameHaystack} ${typeHaystack}`)) return "I";
+  if (/(^|\s)(law office|cabinet d avocat|cabinet avocat|cabinet)(\s|$)/.test(`${nameHaystack} ${typeHaystack}`)) return "L";
+  if (/(^|\s)(financial|finance)(\s|$)/.test(`${nameHaystack} ${typeHaystack}`)) return "F";
+
+  const holdingHaystack = `${nameHaystack} ${typeHaystack} ${legalHaystack}`;
+  if (/(^|\s)(holding|corporation)(\s|$)/.test(holdingHaystack)) return "H";
 
   return null;
 }
