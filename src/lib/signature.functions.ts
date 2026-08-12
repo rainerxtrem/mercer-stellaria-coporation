@@ -587,6 +587,8 @@ export const submitSignature = createServerFn({ method: "POST" })
     method: "drawn" | "generated";
     style?: string | null;
     image_base64: string;
+    image_width?: number;
+    image_height?: number;
     placements: unknown[];
   }) => ({
     token: z.string().regex(/^[0-9a-f]{64}$/).parse(d.token),
@@ -597,6 +599,8 @@ export const submitSignature = createServerFn({ method: "POST" })
     method: z.enum(["drawn", "generated"]).parse(d.method),
     style: z.string().trim().max(40).nullable().optional().parse(d.style || null),
     image_base64: z.string().min(100).max(4_000_000).parse(d.image_base64),
+    image_width: z.number().int().min(1).max(20_000).optional().parse(d.image_width),
+    image_height: z.number().int().min(1).max(20_000).optional().parse(d.image_height),
     placements: z.array(placementSchema).min(1).max(10).parse(d.placements),
   }))
   .handler(async ({ data }) => {
@@ -625,15 +629,30 @@ export const submitSignature = createServerFn({ method: "POST" })
     if (signatureKind === "unknown") {
       throw new Error("Le format de signature est invalide. Utilisez uniquement une image PNG ou JPG.");
     }
+    const signatureAspect = Math.max(
+      0.05,
+      Math.min(20, Number(data.image_width ?? 1) / Math.max(1, Number(data.image_height ?? 1))),
+    );
+
+    const fitSignatureRect = (x: number, y: number, width: number, height: number) => {
+      const safeW = Math.max(40, width);
+      const safeH = Math.max(20, height);
+      const targetAspect = safeW / safeH;
+      if (targetAspect >= signatureAspect) {
+        const drawH = safeH;
+        const drawW = drawH * signatureAspect;
+        return { x: x + (safeW - drawW) / 2, y, width: drawW, height: drawH };
+      }
+      const drawW = safeW;
+      const drawH = drawW / signatureAspect;
+      return { x, y: y + (safeH - drawH) / 2, width: drawW, height: drawH };
+    };
     let verifyUrl: string | null = null;
     let filename = "document-signe.pdf";
     let storage_path = "";
     let bytes: Uint8Array;
 
     if (inv) {
-      if (signatureKind !== "jpeg") {
-        throw new Error("Pour ce document, utilisez une signature JPG ou une signature dessinée/générée.");
-      }
       verifyUrl = `${data.origin}/verification/facture/${inv.public_token}`;
 
       // Génération du PDF signé (document original + signature + certificat)
@@ -642,26 +661,60 @@ export const submitSignature = createServerFn({ method: "POST" })
       const qrMod = await import("qrcode-generator");
       const qrcode = (qrMod as any).default ?? (qrMod as any);
       const { buildInvoicePdf } = await import("@/lib/pdf/invoice-pdf");
-      const jpeg = signatureBytes;
-      bytes = buildInvoicePdf({
+      const unsignedBytes = buildInvoicePdf({
         invoice: inv,
         items: (items ?? []) as any[],
         verifyUrl,
         qrcode,
-        signature: {
-          first_name: data.first_name,
-          last_name: data.last_name,
-          signature_uid,
-          signed_at,
-          method: data.method,
-          style: data.style,
-          ip_address,
-          user_agent,
-          jpeg,
-          placements: data.placements as any,
-          verifyUrl,
-        },
       });
+
+      const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+      const pdf = await PDFDocument.load(unsignedBytes, { ignoreEncryption: true });
+      const pages = pdf.getPages();
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
+      const imageRef = signatureKind === "png"
+        ? await pdf.embedPng(signatureBytes)
+        : await pdf.embedJpg(signatureBytes);
+
+      for (const p of data.placements as Array<{ page: number; x: number; y: number; width: number; height: number }>) {
+        const pageIdx = Math.max(0, Math.min((p.page || 1) - 1, pages.length - 1));
+        const page = pages[pageIdx];
+        if (!page) continue;
+        const rectW = Math.max(40, Math.min(p.width, page.getWidth()));
+        const rectH = Math.max(20, Math.min(p.height, page.getHeight()));
+        const rectX = Math.max(0, Math.min(p.x, page.getWidth() - rectW));
+        const rectTopY = Math.max(0, Math.min(p.y, page.getHeight() - rectH));
+        const fit = fitSignatureRect(rectX, rectTopY, rectW, rectH);
+        const yBottom = Math.max(0, page.getHeight() - fit.y - fit.height);
+        page.drawImage(imageRef, { x: fit.x, y: yBottom, width: fit.width, height: fit.height });
+        page.drawLine({
+          start: { x: fit.x, y: Math.max(0, yBottom - 3) },
+          end: { x: fit.x + fit.width, y: Math.max(0, yBottom - 3) },
+          thickness: 0.5,
+          color: rgb(0.78, 0.8, 0.84),
+        });
+        page.drawText(
+          `${data.first_name} ${data.last_name} — signe le ${new Date(signed_at).toLocaleString("fr-FR")}`,
+          { x: fit.x, y: Math.max(0, yBottom - 12), size: 6, font, color: rgb(0.42, 0.43, 0.48) },
+        );
+      }
+
+      const cert = pdf.addPage([595.28, 841.89]);
+      cert.drawRectangle({ x: 0, y: 800, width: 595.28, height: 42, color: rgb(0.09, 0.15, 0.29) });
+      cert.drawText("CERTIFICAT DE SIGNATURE ELECTRONIQUE", { x: 50, y: 814, size: 13, font: boldFont, color: rgb(1, 1, 1) });
+      cert.drawText("Ce certificat atteste la signature du document ci-joint.", { x: 50, y: 750, size: 9, font, color: rgb(0.42, 0.43, 0.48) });
+      cert.drawText(`Document: ${inv.kind === "quote" ? "Devis" : "Facture"} ${inv.number ?? ""}`, { x: 50, y: 720, size: 9, font, color: rgb(0.09, 0.15, 0.29) });
+      cert.drawText(`Signataire: ${data.first_name} ${data.last_name}`, { x: 50, y: 700, size: 9, font, color: rgb(0.09, 0.15, 0.29) });
+      cert.drawText(`Date: ${new Date(signed_at).toLocaleString("fr-FR")}`, { x: 50, y: 680, size: 9, font, color: rgb(0.09, 0.15, 0.29) });
+      cert.drawText(`Identifiant: ${signature_uid}`, { x: 50, y: 660, size: 9, font, color: rgb(0.09, 0.15, 0.29) });
+      cert.drawText(`IP: ${ip_address ?? "non communiquee"}`, { x: 50, y: 640, size: 9, font, color: rgb(0.09, 0.15, 0.29) });
+      cert.drawRectangle({ x: 50, y: 500, width: 240, height: 90, borderWidth: 0.6, borderColor: rgb(0.78, 0.8, 0.84) });
+      const certFit = fitSignatureRect(58, 510, 224, 70);
+      const certYBottom = 841.89 - certFit.y - certFit.height;
+      cert.drawImage(imageRef, { x: certFit.x, y: certYBottom, width: certFit.width, height: certFit.height });
+
+      bytes = new Uint8Array(await pdf.save());
 
       filename = `${inv.number ?? "document"}-signe.pdf`;
       storage_path = `signatures/${inv.id}/${signature_uid}-${filename}`;
@@ -685,15 +738,17 @@ export const submitSignature = createServerFn({ method: "POST" })
         const pageIdx = Math.max(0, Math.min((p.page || 1) - 1, pages.length - 1));
         const page = pages[pageIdx];
         if (!page) continue;
-        const w = Math.max(40, Math.min(p.width, page.getWidth()));
-        const h = Math.max(20, Math.min(p.height, page.getHeight()));
-        const x = Math.max(0, Math.min(p.x, page.getWidth() - w));
-        const y = Math.max(0, page.getHeight() - p.y - h);
-        page.drawImage(imageRef, { x, y, width: w, height: h });
-        page.drawLine({ start: { x, y: Math.max(0, y - 3) }, end: { x: x + w, y: Math.max(0, y - 3) }, thickness: 0.5, color: rgb(0.78, 0.8, 0.84) });
+        const rectW = Math.max(40, Math.min(p.width, page.getWidth()));
+        const rectH = Math.max(20, Math.min(p.height, page.getHeight()));
+        const rectX = Math.max(0, Math.min(p.x, page.getWidth() - rectW));
+        const rectTopY = Math.max(0, Math.min(p.y, page.getHeight() - rectH));
+        const fit = fitSignatureRect(rectX, rectTopY, rectW, rectH);
+        const y = Math.max(0, page.getHeight() - fit.y - fit.height);
+        page.drawImage(imageRef, { x: fit.x, y, width: fit.width, height: fit.height });
+        page.drawLine({ start: { x: fit.x, y: Math.max(0, y - 3) }, end: { x: fit.x + fit.width, y: Math.max(0, y - 3) }, thickness: 0.5, color: rgb(0.78, 0.8, 0.84) });
         page.drawText(
           `${data.first_name} ${data.last_name} — signe le ${new Date(signed_at).toLocaleString("fr-FR")}`,
-          { x, y: Math.max(0, y - 12), size: 6, font, color: rgb(0.42, 0.43, 0.48) },
+          { x: fit.x, y: Math.max(0, y - 12), size: 6, font, color: rgb(0.42, 0.43, 0.48) },
         );
       }
 

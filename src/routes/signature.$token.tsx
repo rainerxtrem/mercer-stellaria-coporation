@@ -42,6 +42,7 @@ const STYLES = [
 const SCALE = 1.35;
 
 type Placement = { id: string; page: number; x: number; y: number; w: number; h: number };
+type SignatureMeta = { width: number; height: number; aspect: number };
 
 function SignaturePage() {
   const { token } = Route.useParams();
@@ -59,6 +60,7 @@ function SignaturePage() {
   const [method, setMethod] = useState<"drawn" | "generated" | "uploaded">("drawn");
   const [style, setStyle] = useState(STYLES[0]!.id);
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [signatureMeta, setSignatureMeta] = useState<SignatureMeta | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -119,12 +121,14 @@ function SignaturePage() {
   const locked = Boolean(result) || state?.status === "already_signed";
 
   const addPlacement = (pageIndex: number, clientX: number, clientY: number) => {
-    if (!signatureData || locked) return;
+    if (!signatureData || !signatureMeta || locked) return;
     const canvas = canvasRefs.current[pageIndex];
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const w = 180;
-    const h = 70;
+    const maxW = Math.min(220, rect.width);
+    const minW = 80;
+    const w = Math.max(minW, maxW);
+    const h = Math.max(28, Math.min(180, w / signatureMeta.aspect));
     const x = Math.max(0, Math.min(clientX - rect.left - w / 2, rect.width - w));
     const y = Math.max(0, Math.min(clientY - rect.top - h / 2, rect.height - h));
     setPlacements((p) => [...p, { id: crypto.randomUUID(), page: pageIndex + 1, x, y, w, h }]);
@@ -145,11 +149,10 @@ function SignaturePage() {
         list.map((p) => {
           if (p.id !== id) return p;
           if (mode === "move") return { ...p, x: Math.max(0, base.x + dx), y: Math.max(0, base.y + dy) };
-          return {
-            ...p,
-            w: Math.max(60, Math.min(base.w + dx, 480)),
-            h: Math.max(28, Math.min(base.h + dy, 260)),
-          };
+          const ratio = Math.max(0.2, base.w / Math.max(1, base.h));
+          const nextW = Math.max(60, Math.min(base.w + dx + dy * 0.2, 480));
+          const nextH = Math.max(28, Math.min(nextW / ratio, 260));
+          return { ...p, w: nextW, h: nextH };
         }),
       );
     };
@@ -165,7 +168,7 @@ function SignaturePage() {
     if (!signatureData || placements.length === 0) return;
     setSubmitting(true);
     try {
-      const jpeg = await toJpeg(signatureData);
+      const image = extractBase64(signatureData);
       const payload = {
         token,
         pin: pin || null,
@@ -174,7 +177,9 @@ function SignaturePage() {
         last_name: lastName.trim(),
         method: method === "uploaded" ? "drawn" : method,
         style: method === "generated" ? style : null,
-        image_base64: jpeg,
+        image_base64: image,
+        image_width: signatureMeta?.width,
+        image_height: signatureMeta?.height,
         placements: placements.map((p) => ({
           page: p.page,
           x: p.x / SCALE,
@@ -418,7 +423,12 @@ function SignaturePage() {
         style={style}
         setStyle={setStyle}
         fullName={`${firstName} ${lastName}`.trim()}
-        onConfirm={(data) => { setSignatureData(data); setDialogOpen(false); }}
+        onConfirm={async (data) => {
+          setSignatureData(data);
+          setSignatureMeta(await readImageMeta(data));
+          setPlacements([]);
+          setDialogOpen(false);
+        }}
       />
     </div>
   );
@@ -454,8 +464,7 @@ function SignatureDialog({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     dirty.current = false;
   };
 
@@ -477,7 +486,7 @@ function SignatureDialog({
   const confirm = () => {
     if (method === "drawn") {
       if (!dirty.current) return;
-      onConfirm(canvasRef.current!.toDataURL("image/jpeg", 0.95));
+      onConfirm(canvasRef.current!.toDataURL("image/png"));
       return;
     }
     if (method === "uploaded") {
@@ -490,14 +499,13 @@ function SignatureDialog({
     canvas.width = 700;
     canvas.height = 240;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#0b1220";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `92px ${font}`;
     ctx.fillText(fullName || "Signature", canvas.width / 2, canvas.height / 2);
-    onConfirm(canvas.toDataURL("image/jpeg", 0.95));
+    onConfirm(canvas.toDataURL("image/png"));
   };
 
   const uploadSignatureImage = async (file: File | null) => {
@@ -612,18 +620,15 @@ function SignatureDialog({
   );
 }
 
-/** Convertit une image data-URL en base64 JPEG (fond blanc) pour l'intégration PDF. */
-async function toJpeg(dataUrl: string): Promise<string> {
-  if (dataUrl.startsWith("data:image/jpeg")) return dataUrl.slice(dataUrl.indexOf(",") + 1);
+function extractBase64(dataUrl: string): string {
+  return dataUrl.includes(",") ? dataUrl.slice(dataUrl.indexOf(",") + 1) : dataUrl;
+}
+
+async function readImageMeta(dataUrl: string): Promise<SignatureMeta> {
   const img = new Image();
   img.src = dataUrl;
   await img.decode();
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0);
-  return canvas.toDataURL("image/jpeg", 0.95).split(",")[1]!;
+  const width = Math.max(1, img.naturalWidth || 1);
+  const height = Math.max(1, img.naturalHeight || 1);
+  return { width, height, aspect: width / height };
 }
