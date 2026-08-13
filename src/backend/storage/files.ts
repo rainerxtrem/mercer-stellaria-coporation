@@ -6,7 +6,15 @@ import { dirname, join, resolve, sep } from "node:path";
 const DEFAULT_ROOT = process.env.NODE_ENV === "production" ? "/data/storage" : ".data/storage";
 
 export function storageRoot(): string {
-  return resolve(process.env.STORAGE_ROOT ?? DEFAULT_ROOT);
+  const configured = process.env.STORAGE_ROOT?.trim();
+  if (!configured) return resolve(DEFAULT_ROOT);
+
+  // In production, refuse relative paths so deployments cannot reset uploaded docs.
+  if (process.env.NODE_ENV === "production" && !configured.startsWith("/")) {
+    return "/data/storage";
+  }
+
+  return resolve(configured);
 }
 
 /** Rejects absolute paths, `..` segments and anything escaping the bucket root. */
