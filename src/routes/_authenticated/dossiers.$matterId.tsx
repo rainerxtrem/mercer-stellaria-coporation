@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/site/PageHeader";
@@ -22,7 +22,10 @@ import {
   deleteDocument,
   getDocumentDownloadUrl,
   listMatterActivity,
+  listMatterClients,
+  setMatterClients,
 } from "@/lib/matters.functions";
+import { listClients } from "@/lib/clients.functions";
 import {
   listMatterAssistants, addMatterAssistant, removeMatterAssistant,
   listTasks, createTask, updateTask, deleteTask,
@@ -85,6 +88,9 @@ function Page() {
   const taskDeleteFn = useServerFn(deleteTask);
   const signDocLinkFn = useServerFn(createMatterDocumentSignatureLink);
   const listDocSignatureLinksFn = useServerFn(listMatterDocumentSignatureLinks);
+  const listMatterClientsFn = useServerFn(listMatterClients);
+  const setMatterClientsFn = useServerFn(setMatterClients);
+  const listClientsFn = useServerFn(listClients);
   const session = useSession();
   const uid = session?.user.id;
 
@@ -93,6 +99,11 @@ function Page() {
   const activity = useQuery({ queryKey: ["activity", matterId], queryFn: () => activityFn({ data: { matter_id: matterId } }) });
   const team = useQuery({ queryKey: ["team", matterId], queryFn: () => teamListFn({ data: { matter_id: matterId } }) });
   const tasks = useQuery({ queryKey: ["tasks", matterId], queryFn: () => tasksListFn({ data: { matter_id: matterId } }) });
+  const clients = useQuery({ queryKey: ["clients"], queryFn: () => listClientsFn() });
+  const linkedClients = useQuery({
+    queryKey: ["matter-clients", matterId],
+    queryFn: () => listMatterClientsFn({ data: { matter_id: matterId } }),
+  });
   const listInvoicesFn = useServerFn(listInvoices);
   const quotesQ = useQuery({ queryKey: ["invoices", "matter", matterId, "quote"], queryFn: () => listInvoicesFn({ data: { matter_id: matterId, kind: "quote" } }) });
   const invoicesQ = useQuery({ queryKey: ["invoices", "matter", matterId, "invoice"], queryFn: () => listInvoicesFn({ data: { matter_id: matterId, kind: "invoice" } }) });
@@ -151,6 +162,13 @@ function Page() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [signatureDialogDoc, setSignatureDialogDoc] = useState<Doc | null>(null);
   const [signersCount, setSignersCount] = useState("1");
+  const [clientsDialogOpen, setClientsDialogOpen] = useState(false);
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!clientsDialogOpen) return;
+    setSelectedClientIds(((linkedClients.data ?? []) as any[]).map((c) => String(c.id)));
+  }, [clientsDialogOpen, linkedClients.data]);
 
   const folders: Folder[] = tree.data?.folders ?? [];
   const documents: Doc[] = tree.data?.documents ?? [];
@@ -182,6 +200,25 @@ function Page() {
     qc.invalidateQueries({ queryKey: ["tree", matterId] });
     qc.invalidateQueries({ queryKey: ["activity", matterId] });
   };
+
+  const saveMatterClients = useMutation({
+    mutationFn: (clientIds: string[]) =>
+      setMatterClientsFn({ data: { matter_id: matterId, client_ids: clientIds } }),
+    onSuccess: (result: any) => {
+      toast.success(`${result.clients_count ?? selectedClientIds.length} client(s) rattaché(s)`);
+      setClientsDialogOpen(false);
+      qc.invalidateQueries({ queryKey: ["matter", matterId] });
+      qc.invalidateQueries({ queryKey: ["matter-clients", matterId] });
+      qc.invalidateQueries({ queryKey: ["matters"] });
+      qc.invalidateQueries({ queryKey: ["activity", matterId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? "Impossible de mettre à jour les clients du dossier"),
+  });
+
+  const clientsLabel = ((linkedClients.data ?? []) as any[])
+    .map((c) => `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim())
+    .filter((name) => name.length > 0)
+    .join(", ");
 
   const mkFolder = useMutation({
     mutationFn: (name: string) => createFolderFn({ data: { matter_id: matterId, parent_id: currentFolder, name } }),
@@ -333,7 +370,7 @@ function Page() {
       <PageHeader
         eyebrow={matter.data?.number ?? "Dossier"}
         title={matter.data?.title ?? "Chargement…"}
-        description={matter.data?.clients ? `Client : ${matter.data.clients.first_name} ${matter.data.clients.last_name}` : undefined}
+        description={clientsLabel ? `Clients : ${clientsLabel}` : undefined}
       >
         <div className="flex flex-wrap items-center gap-2">
           <Select
@@ -366,6 +403,15 @@ function Page() {
             }}
           >
             <Pencil className="mr-1.5 h-4 w-4" />Renommer
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-white text-white hover:bg-white hover:text-navy"
+            disabled={!matter.data}
+            onClick={() => setClientsDialogOpen(true)}
+          >
+            <Users className="mr-1.5 h-4 w-4" />Gérer clients
           </Button>
           <Button asChild variant="outline" size="sm" className="border-white text-white hover:bg-white hover:text-navy">
             <Link to="/dossiers"><ArrowLeft className="mr-1.5 h-4 w-4" />Retour</Link>
@@ -758,6 +804,63 @@ function Page() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setSignatureDialogDoc(null)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={clientsDialogOpen} onOpenChange={setClientsDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Clients du dossier</DialogTitle>
+            <DialogDescription>
+              Sélectionnez un ou plusieurs clients pour ce dossier.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[360px] space-y-2 overflow-auto rounded-md border border-border p-3">
+            {clients.isLoading ? (
+              <div className="text-sm text-muted-foreground">Chargement des clients…</div>
+            ) : ((clients.data ?? []) as any[]).length === 0 ? (
+              <div className="text-sm text-muted-foreground">Aucun client disponible.</div>
+            ) : (
+              ((clients.data ?? []) as any[]).map((client: any) => {
+                const checked = selectedClientIds.includes(String(client.id));
+                return (
+                  <label key={client.id} className="flex cursor-pointer items-center gap-3 rounded-md border border-border/70 p-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        setSelectedClientIds((prev) => {
+                          const id = String(client.id);
+                          if (e.target.checked) return prev.includes(id) ? prev : [...prev, id];
+                          return prev.filter((x) => x !== id);
+                        });
+                      }}
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {client.first_name} {client.last_name}
+                      </div>
+                      {client.company ? (
+                        <div className="truncate text-xs text-muted-foreground">{client.company}</div>
+                      ) : null}
+                    </div>
+                  </label>
+                );
+              })
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClientsDialogOpen(false)}>Annuler</Button>
+            <Button
+              className="bg-navy text-white hover:bg-navy-deep"
+              disabled={saveMatterClients.isPending}
+              onClick={() => saveMatterClients.mutate(selectedClientIds)}
+            >
+              Enregistrer
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -116,8 +116,125 @@ export const createMatter = createServerFn({ method: "POST" })
       .select("id, number, title")
       .single();
     if (error) throw new Error(error.message);
+
+    if (data.client_id) {
+      const { error: linkError } = await context.supabase.from("matter_clients").insert({
+        matter_id: created.id,
+        client_id: data.client_id,
+        created_by: context.userId,
+      });
+      if (linkError) throw new Error(linkError.message);
+    }
+
     await logActivity(context, created.id, "create", `Dossier ${created.number} créé`);
     return created;
+  });
+
+export const listMatterClients = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { matter_id: string }) => ({ matter_id: z.string().uuid().parse(d.matter_id) }))
+  .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
+    const { data: matter, error: matterError } = await context.supabase
+      .from("matters")
+      .select("id")
+      .eq("id", data.matter_id)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+    if (matterError) throw new Error(matterError.message);
+    if (!matter) throw new Error("Dossier introuvable");
+
+    const { data: rows, error } = await context.supabase
+      .from("matter_clients")
+      .select("client_id, clients(id, first_name, last_name, company, phone)")
+      .eq("matter_id", data.matter_id);
+    if (error) throw new Error(error.message);
+
+    return (rows ?? [])
+      .map((row: any) => row.clients)
+      .filter((client: any) => Boolean(client?.id))
+      .sort((a: any, b: any) =>
+        `${a.last_name ?? ""} ${a.first_name ?? ""}`.localeCompare(`${b.last_name ?? ""} ${b.first_name ?? ""}`),
+      );
+  });
+
+export const setMatterClients = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { matter_id: string; client_ids: string[] }) => ({
+    matter_id: z.string().uuid().parse(d.matter_id),
+    client_ids: z.array(z.string().uuid()).max(100).parse(d.client_ids ?? []),
+  }))
+  .handler(async ({ data, context }) => {
+    const firmId = await requireActiveFirmId(context as any);
+    const uniqueClientIds = Array.from(new Set(data.client_ids));
+
+    const { data: matter, error: matterError } = await context.supabase
+      .from("matters")
+      .select("id, client_id")
+      .eq("id", data.matter_id)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+    if (matterError) throw new Error(matterError.message);
+    if (!matter) throw new Error("Dossier introuvable");
+
+    if (uniqueClientIds.length > 0) {
+      const { data: clients, error: clientsError } = await context.supabase
+        .from("clients")
+        .select("id")
+        .eq("firm_id", firmId)
+        .in("id", uniqueClientIds);
+      if (clientsError) throw new Error(clientsError.message);
+      if ((clients ?? []).length !== uniqueClientIds.length) {
+        throw new Error("Un ou plusieurs clients sélectionnés sont invalides pour ce cabinet.");
+      }
+    }
+
+    const { data: existingRows, error: existingError } = await context.supabase
+      .from("matter_clients")
+      .select("client_id")
+      .eq("matter_id", data.matter_id);
+    if (existingError) throw new Error(existingError.message);
+
+    const existing = new Set((existingRows ?? []).map((row: any) => String(row.client_id)));
+    const desired = new Set(uniqueClientIds);
+    const toAdd = uniqueClientIds.filter((id) => !existing.has(id));
+    const toRemove = Array.from(existing).filter((id) => !desired.has(id));
+
+    if (toAdd.length > 0) {
+      const { error: addError } = await context.supabase.from("matter_clients").insert(
+        toAdd.map((clientId) => ({ matter_id: data.matter_id, client_id: clientId, created_by: context.userId })),
+      );
+      if (addError) throw new Error(addError.message);
+    }
+
+    if (toRemove.length > 0) {
+      const { error: removeError } = await context.supabase
+        .from("matter_clients")
+        .delete()
+        .eq("matter_id", data.matter_id)
+        .in("client_id", toRemove);
+      if (removeError) throw new Error(removeError.message);
+    }
+
+    const primaryClientId = uniqueClientIds[0] ?? null;
+    if ((matter.client_id ?? null) !== primaryClientId) {
+      const { error: updateMatterError } = await context.supabase
+        .from("matters")
+        .update({ client_id: primaryClientId })
+        .eq("id", data.matter_id)
+        .eq("firm_id", firmId);
+      if (updateMatterError) throw new Error(updateMatterError.message);
+    }
+
+    await logActivity(
+      context,
+      data.matter_id,
+      "clients_update",
+      `${uniqueClientIds.length} client(s) rattaché(s) au dossier`,
+      { metadata: { clients_count: uniqueClientIds.length } },
+    );
+
+    return { ok: true, clients_count: uniqueClientIds.length };
   });
 
 const STATUS_LABELS: Record<string, string> = {

@@ -37,6 +37,32 @@ async function myClientRow(context: { supabase: any; userId: string }) {
   return data;
 }
 
+async function listAllowedMatterIdsForClient(
+  context: { supabase: any; userId: string },
+  clientId: string,
+): Promise<string[]> {
+  const [{ data: linkedRows, error: linkedError }, { data: directRows, error: directError }] = await Promise.all([
+    context.supabase.from("matter_clients").select("matter_id").eq("client_id", clientId),
+    context.supabase.from("matters").select("id").eq("client_id", clientId),
+  ]);
+  if (linkedError) throw new Error(linkedError.message);
+  if (directError) throw new Error(directError.message);
+
+  const ids = new Set<string>();
+  for (const row of linkedRows ?? []) ids.add(String((row as any).matter_id));
+  for (const row of directRows ?? []) ids.add(String((row as any).id));
+  return Array.from(ids);
+}
+
+async function assertClientMatterAccess(
+  context: { supabase: any; userId: string },
+  clientId: string,
+  matterId: string,
+): Promise<void> {
+  const allowed = await listAllowedMatterIdsForClient(context, clientId);
+  if (!allowed.includes(matterId)) throw new Error("Dossier introuvable");
+}
+
 async function getOrCreateGeneralConversation(
   context: { supabase: any; userId: string },
   client: { id: string; firm_id: string | null },
@@ -164,9 +190,14 @@ export const testClientDiscordWebhook = createServerFn({ method: "POST" })
 export const listClientMattersPortal = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const client = await myClientRow(context);
+    const matterIds = await listAllowedMatterIdsForClient(context, client.id);
+    if (matterIds.length === 0) return [];
+
     const { data, error } = await context.supabase
       .from("matters")
       .select("id, number, title, status, type, opened_on, owner_id")
+      .in("id", matterIds)
       .order("opened_on", { ascending: false });
     if (error) throw new Error(error.message);
     return withActorNames(context.supabase, data ?? [], { owner_id: "owner_name" });
@@ -176,6 +207,9 @@ export const getClientMatter = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { matter_id: string }) => ({ matter_id: z.string().uuid().parse(d.matter_id) }))
   .handler(async ({ data, context }) => {
+    const client = await myClientRow(context);
+    await assertClientMatterAccess(context, client.id, data.matter_id);
+
     const [{ data: matter }, { data: docs }, { data: activity }] = await Promise.all([
       context.supabase
         .from("matters")
@@ -203,9 +237,14 @@ export const getClientMatter = createServerFn({ method: "GET" })
 export const listClientDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const client = await myClientRow(context);
+    const matterIds = await listAllowedMatterIdsForClient(context, client.id);
+    if (matterIds.length === 0) return [];
+
     const { data, error } = await context.supabase
       .from("matter_documents")
       .select("id, filename, mime_type, size_bytes, created_at, uploaded_by_client, matter_id, matters(id, number, title)")
+      .in("matter_id", matterIds)
       .order("created_at", { ascending: false })
       .limit(300);
     if (error) throw new Error(error.message);
@@ -216,6 +255,7 @@ export const getClientDocumentUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => ({ id: z.string().uuid().parse(d.id) }))
   .handler(async ({ data, context }) => {
+    const client = await myClientRow(context);
     const { data: row, error } = await context.supabase
       .from("matter_documents")
       .select("storage_path, filename, matter_id, mime_type")
@@ -223,6 +263,7 @@ export const getClientDocumentUrl = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Document introuvable ou non partagé.");
+    await assertClientMatterAccess(context, client.id, row.matter_id);
     const { data: signed, error: sErr } = await context.supabase.storage
       .from("bar-media")
       .createSignedUrl(row.storage_path, 300);
@@ -249,6 +290,8 @@ export const createClientUploadUrl = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (data.size_bytes > MAX_SIZE) throw new Error("Fichier trop volumineux (50 Mo maximum).");
     if (!CLIENT_ALLOWED_MIME.has(data.mime_type)) throw new Error("Type de fichier non autorisé.");
+    const client = await myClientRow(context);
+    await assertClientMatterAccess(context, client.id, data.matter_id);
     const docId = crypto.randomUUID();
     const safeName = data.filename.replace(/[^a-zA-Z0-9._-]+/g, "_");
     const path = `matters/${data.matter_id}/${docId}-${safeName}`;
@@ -274,6 +317,9 @@ export const finalizeClientUpload = createServerFn({ method: "POST" })
     comment: z.string().trim().max(1000).nullable().optional().parse(d.comment || null),
   }))
   .handler(async ({ data, context }) => {
+    const client = await myClientRow(context);
+    await assertClientMatterAccess(context, client.id, data.matter_id);
+
     const { error } = await context.supabase.from("matter_documents").insert({
       id: data.doc_id,
       matter_id: data.matter_id,
@@ -317,6 +363,9 @@ export const listClientMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { matter_id: string }) => ({ matter_id: z.string().uuid().parse(d.matter_id) }))
   .handler(async ({ data, context }) => {
+    const client = await myClientRow(context);
+    await assertClientMatterAccess(context, client.id, data.matter_id);
+
     await context.supabase
       .from("matter_messages")
       .update({ read_by_client_at: new Date().toISOString() })
@@ -558,14 +607,25 @@ export const getClientConversationAttachmentUrl = createServerFn({ method: "POST
     message_id: z.string().uuid().parse(data.message_id),
   }))
   .handler(async ({ data, context }) => {
-    await myClientRow(context);
+    const client = await myClientRow(context);
     const { data: message, error } = await context.supabase
       .from("client_conversation_messages")
-      .select("attachment_path, attachment_name")
+      .select("conversation_id, attachment_path, attachment_name")
       .eq("id", data.message_id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!message?.attachment_path) throw new Error("Pièce jointe inaccessible.");
+
+    const { data: convo, error: convoError } = await context.supabase
+      .from("client_conversations")
+      .select("id")
+      .eq("id", message.conversation_id)
+      .eq("client_id", client.id)
+      .is("matter_id", null)
+      .maybeSingle();
+    if (convoError) throw new Error(convoError.message);
+    if (!convo) throw new Error("Pièce jointe inaccessible.");
+
     const { data: signed, error: signedError } = await context.supabase.storage
       .from("bar-media")
       .createSignedUrl(message.attachment_path, 300, { download: message.attachment_name ?? "document" });
@@ -581,6 +641,9 @@ export const sendClientMessage = createServerFn({ method: "POST" })
     document_id: d.document_id ? z.string().uuid().parse(d.document_id) : null,
   }))
   .handler(async ({ data, context }) => {
+    const client = await myClientRow(context);
+    await assertClientMatterAccess(context, client.id, data.matter_id);
+
     const { data: created, error } = await context.supabase
       .from("matter_messages")
       .insert({
@@ -621,9 +684,11 @@ export const sendClientMessage = createServerFn({ method: "POST" })
 export const listClientDocumentsToSign = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const client = await myClientRow(context);
     const { data: invoices, error } = await context.supabase
       .from("invoices")
       .select("id, number, kind, total, currency, issue_date, due_date, delivery_status, sent_at, viewed_at, signed_at, matter_id")
+      .eq("client_id", client.id)
       .order("sent_at", { ascending: false });
     if (error) throw new Error(error.message);
     const rows = invoices ?? [];
@@ -658,11 +723,13 @@ export const refuseClientDocument = createServerFn({ method: "POST" })
     reason: z.string().trim().max(1000).nullable().optional().parse(d.reason || null),
   }))
   .handler(async ({ data, context }) => {
+    const client = await myClientRow(context);
     // La RLS ne laisse voir que les documents effectivement envoyés à ce client.
     const { data: inv } = await context.supabase
       .from("invoices")
       .select("id, kind, number, matter_id, owner_id, delivery_status")
       .eq("id", data.invoice_id)
+      .eq("client_id", client.id)
       .maybeSingle();
     if (!inv) throw new Error("Document introuvable");
     if (inv.delivery_status === "signed") throw new Error("Ce document est déjà signé.");
@@ -713,17 +780,55 @@ export const getClientDashboard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const client = await myClientRow(context);
-    const [{ data: matters }, { data: docs }, { data: invoices }, { data: messages }, { count: notificationsUnread }] = await Promise.all([
-      context.supabase.from("matters").select("id, number, title, status, opened_on").order("opened_on", { ascending: false }),
-      context.supabase.from("matter_documents").select("id, filename, created_at, matter_id").order("created_at", { ascending: false }).limit(5),
-      context.supabase.from("invoices").select("id, number, kind, total, currency, delivery_status, sent_at").order("sent_at", { ascending: false }),
-      context.supabase.from("matter_messages").select("id, body, created_at, matter_id, author_id").order("created_at", { ascending: false }).limit(5),
+    const matterIds = await listAllowedMatterIdsForClient(context, client.id);
+
+    const [matterRes, docsRes, invoicesRes, messagesRes, notificationsRes] = await Promise.all([
+      matterIds.length > 0
+        ? context.supabase
+            .from("matters")
+            .select("id, number, title, status, opened_on")
+            .in("id", matterIds)
+            .order("opened_on", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      matterIds.length > 0
+        ? context.supabase
+            .from("matter_documents")
+            .select("id, filename, created_at, matter_id")
+            .in("matter_id", matterIds)
+            .order("created_at", { ascending: false })
+            .limit(5)
+        : Promise.resolve({ data: [], error: null }),
+      context.supabase
+        .from("invoices")
+        .select("id, number, kind, total, currency, delivery_status, sent_at")
+        .eq("client_id", client.id)
+        .order("sent_at", { ascending: false }),
+      matterIds.length > 0
+        ? context.supabase
+            .from("matter_messages")
+            .select("id, body, created_at, matter_id, author_id")
+            .in("matter_id", matterIds)
+            .order("created_at", { ascending: false })
+            .limit(5)
+        : Promise.resolve({ data: [], error: null }),
       context.supabase
         .from("notifications")
         .select("id", { count: "exact", head: true })
         .eq("user_id", context.userId)
         .is("read_at", null),
     ]);
+    if (matterRes.error) throw new Error(matterRes.error.message);
+    if (docsRes.error) throw new Error(docsRes.error.message);
+    if (invoicesRes.error) throw new Error(invoicesRes.error.message);
+    if (messagesRes.error) throw new Error(messagesRes.error.message);
+    if (notificationsRes.error) throw new Error(notificationsRes.error.message);
+
+    const matters = matterRes.data ?? [];
+    const docs = docsRes.data ?? [];
+    const invoices = invoicesRes.data ?? [];
+    const messages = messagesRes.data ?? [];
+    const notificationsUnread = notificationsRes.count ?? 0;
+
     const invRows = invoices ?? [];
     const unreadMessages = (messages ?? []).filter(
       (m: any) => m.author_id !== context.userId,
