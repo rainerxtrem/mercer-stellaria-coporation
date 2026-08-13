@@ -303,7 +303,11 @@ function Page() {
         size_bytes: file.size,
       }});
       const putRes = await fetch(meta.signed_url, { method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
-      if (!putRes.ok) throw new Error(`Upload échoué (${putRes.status})`);
+      if (!putRes.ok) {
+        const payload = await putRes.json().catch(() => ({} as Record<string, unknown>));
+        const detail = typeof payload.message === "string" ? payload.message : null;
+        throw new Error(detail ? `Upload échoué (${putRes.status}) : ${detail}` : `Upload échoué (${putRes.status})`);
+      }
       await finalizeFn({ data: {
         doc_id: meta.doc_id,
         matter_id: matterId,

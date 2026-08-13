@@ -26,7 +26,7 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     STORAGE_ROOT=/data/storage
 
-RUN apk add --no-cache tini \
+RUN apk add --no-cache tini su-exec \
     && addgroup -S app && adduser -S -G app app \
     && mkdir -p /data/storage && chown -R app:app /data
 
@@ -40,7 +40,6 @@ COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
 
-USER app
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
