@@ -134,7 +134,7 @@ VALUES
   ('clients', 'Clients', 'Fiches clients et rattachements', '/clients', 'operations', 'Users', 30),
   ('documents', 'Documents', 'Pièces et gestion documentaire', '/dossiers', 'operations', 'FileText', 40),
   ('document_generator', 'Générateur documentaire', 'Modèles et génération de documents', '/cabinet/modeles', 'operations', 'FileStack', 50),
-  ('quotes', 'Facturation', 'Gestion de la facturation', '/facturation', 'finance', 'ScrollText', 60),
+  ('quotes', 'Devis', 'Gestion des devis', '/facturation', 'finance', 'ScrollText', 60),
   ('billing', 'Facturation', 'Factures et paiements', '/facturation', 'finance', 'Receipt', 70),
   ('signature', 'Signature', 'Signature électronique', '/facturation', 'finance', 'FileCheck2', 80),
   ('messaging', 'Messagerie', 'Communication autour des dossiers', '/dossiers', 'operations', 'MessageSquare', 90),
