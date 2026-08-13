@@ -106,19 +106,33 @@ function SignaturePage() {
       for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
       const pdf = await pdfjs.getDocument({ data: bytes }).promise;
       if (cancelled) return;
-      const dims: { width: number; height: number }[] = [];
+
+      const pageEntries: Array<{ pageNumber: number; viewport: any }> = [];
       for (let n = 1; n <= pdf.numPages; n += 1) {
         const page = await pdf.getPage(n);
-        const viewport = page.getViewport({ scale: SCALE });
-        dims.push({ width: viewport.width, height: viewport.height });
-        setPages([...dims]);
-        await new Promise((r) => requestAnimationFrame(() => r(null)));
-        const canvas = canvasRefs.current[n - 1];
+        pageEntries.push({ pageNumber: n, viewport: page.getViewport({ scale: SCALE }) });
+      }
+
+      setPages(pageEntries.map((entry) => ({ width: entry.viewport.width, height: entry.viewport.height })));
+
+      // Wait for React to mount all canvases before rendering pages.
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+
+      for (const entry of pageEntries) {
+        if (cancelled) return;
+        const page = await pdf.getPage(entry.pageNumber);
+        let canvas: HTMLCanvasElement | null = null;
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          canvas = canvasRefs.current[entry.pageNumber - 1] ?? null;
+          if (canvas) break;
+          await new Promise((r) => requestAnimationFrame(() => r(null)));
+        }
         if (!canvas) continue;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        canvas.width = entry.viewport.width;
+        canvas.height = entry.viewport.height;
         const ctx = canvas.getContext("2d");
-        if (ctx) await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+        if (ctx) await page.render({ canvasContext: ctx, viewport: entry.viewport, canvas }).promise;
       }
     })().catch(() => toast.error("Impossible d'afficher le document."));
     return () => { cancelled = true; };
