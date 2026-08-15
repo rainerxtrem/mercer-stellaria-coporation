@@ -81,11 +81,9 @@ async function requireActiveFirmId(context: { supabase: any; userId: string; cla
 export const listClients = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const firmId = await requireActiveFirmId(context as any);
     const { data, error } = await context.supabase
       .from("clients")
       .select("*")
-      .eq("firm_id", firmId)
       .order("last_name");
     if (error) throw new Error(error.message);
     return withActorNames(context.supabase, data ?? [], {
@@ -98,12 +96,10 @@ export const getClient = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => ({ id: z.string().uuid().parse(d.id) }))
   .handler(async ({ data, context }) => {
-    const firmId = await requireActiveFirmId(context as any);
     const { data: client, error } = await context.supabase
       .from("clients")
       .select("*")
       .eq("id", data.id)
-      .eq("firm_id", firmId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!client) throw new Error("Client introuvable");
@@ -112,7 +108,6 @@ export const getClient = createServerFn({ method: "GET" })
         .from("matters")
         .select("id, number, title, status, opened_on")
         .eq("client_id", data.id)
-        .eq("firm_id", firmId)
         .order("opened_on", { ascending: false }),
       context.supabase
         .from("matter_clients")
@@ -145,17 +140,16 @@ export const upsertClient = createServerFn({ method: "POST" })
     return { id, ...safeParse(rest) };
   })
   .handler(async ({ data, context }) => {
-    const firmId = await requireActiveFirmId(context as any);
     if (data.id) {
       const { id, ...updates } = data;
-      const { error } = await context.supabase.from("clients").update(updates).eq("id", id).eq("firm_id", firmId);
+      const { error } = await context.supabase.from("clients").update(updates).eq("id", id);
       if (error) throw new Error(error.message);
       return { id };
     }
     const { id: _i, ...insert } = data;
     const { data: created, error } = await context.supabase
       .from("clients")
-      .insert({ ...insert, owner_id: context.userId, firm_id: firmId })
+      .insert({ ...insert, owner_id: context.userId })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -166,8 +160,7 @@ export const deleteClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => ({ id: z.string().uuid().parse(d.id) }))
   .handler(async ({ data, context }) => {
-    const firmId = await requireActiveFirmId(context as any);
-    const { error } = await context.supabase.from("clients").delete().eq("id", data.id).eq("firm_id", firmId);
+    const { error } = await context.supabase.from("clients").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
