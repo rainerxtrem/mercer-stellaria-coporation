@@ -166,6 +166,58 @@ describe("Multi-entreprise modulaire", () => {
     expect((list.data ?? []).some((item: any) => item.id === row?.id)).toBe(false);
   });
 
+  it.skipIf(!canAuthenticate)("partage les clients entre entreprises tout en isolant les dossiers", async () => {
+    const ctx = await seed();
+    const service = createServerClient(SERVICE_CONTEXT);
+
+    const sharedClient = await service
+      .from("clients")
+      .insert({
+        owner_id: ctx.userA,
+        first_name: "Client",
+        last_name: "Mutuel",
+        profile_id: null,
+      } as never)
+      .select("id")
+      .single();
+    expect(sharedClient.error).toBeNull();
+    if (sharedClient.data?.id) createdClientIds.push(sharedClient.data.id as string);
+
+    const matterInA = await service
+      .from("matters")
+      .insert({
+        owner_id: ctx.userA,
+        client_id: sharedClient.data!.id,
+        firm_id: ctx.firmA,
+        title: "Dossier de client mutuel A",
+        status: "open",
+        number: "",
+      } as never)
+      .select("id")
+      .single();
+    expect(matterInA.error).toBeNull();
+    if (matterInA.data?.id) createdMatterIds.push(matterInA.data.id as string);
+
+    const clientA = userClient(ctx.userA, ctx.firmA);
+    const clientB = userClient(ctx.userA, ctx.firmB);
+
+    const sharedVisibleInA = await clientA.from("clients").select("id").eq("id", sharedClient.data!.id);
+    const sharedVisibleInB = await clientB.from("clients").select("id").eq("id", sharedClient.data!.id);
+
+    expect(sharedVisibleInA.error).toBeNull();
+    expect(sharedVisibleInB.error).toBeNull();
+    expect((sharedVisibleInA.data ?? []).length).toBe(1);
+    expect((sharedVisibleInB.data ?? []).length).toBe(1);
+
+    const matterVisibleInA = await clientA.from("matters").select("id").eq("id", matterInA.data!.id);
+    const matterVisibleInB = await clientB.from("matters").select("id").eq("id", matterInA.data!.id);
+
+    expect(matterVisibleInA.error).toBeNull();
+    expect(matterVisibleInB.error).toBeNull();
+    expect((matterVisibleInA.data ?? []).length).toBe(1);
+    expect((matterVisibleInB.data ?? []).length).toBe(0);
+  });
+
   it.skipIf(!canAuthenticate)("isole strictement clients dossiers factures entre entreprise A et B", async () => {
     const ctx = await seed();
     const service = createServerClient(SERVICE_CONTEXT);
@@ -236,7 +288,7 @@ describe("Multi-entreprise modulaire", () => {
     const listBClients = await clientBContext.from("clients").select("id").eq("id", createdClient.data!.id);
     const listBMatters = await clientBContext.from("matters").select("id").eq("id", createdMatter.data!.id);
     const listBInvoices = await clientBContext.from("invoices").select("id").eq("id", createdQuote.data!.id);
-    expect((listBClients.data ?? []).length).toBe(0);
+    expect((listBClients.data ?? []).length).toBe(1);
     expect((listBMatters.data ?? []).length).toBe(0);
     expect((listBInvoices.data ?? []).length).toBe(0);
 
