@@ -82,6 +82,8 @@ const EMPTY_COMPANY: CompanyForm = {
   status: "active",
 };
 
+const ACCOUNTING_AUTO_REFRESH_MS = 15000;
+
 function money(amount: unknown, currency = "USD") {
   const value = Number(amount ?? 0);
   return `${value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
@@ -249,12 +251,16 @@ function ComptabilitePage() {
         },
       }),
     enabled: initialSyncSettled,
+    refetchInterval: initialSyncSettled ? ACCOUNTING_AUTO_REFRESH_MS : false,
+    refetchIntervalInBackground: true,
   });
 
   const anomaliesQ = useQuery({
     queryKey: ["accounting", "anomalies"],
     queryFn: () => listAnomaliesFn(),
     enabled: initialSyncSettled,
+    refetchInterval: initialSyncSettled ? ACCOUNTING_AUTO_REFRESH_MS : false,
+    refetchIntervalInBackground: true,
   });
 
   useEffect(() => {
