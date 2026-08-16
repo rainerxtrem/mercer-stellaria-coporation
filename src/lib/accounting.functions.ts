@@ -113,7 +113,28 @@ function isValidInvoiceToken(value: string | null | undefined): boolean {
   const token = String(value ?? "").trim();
   if (token.length < 2) return false;
   const lowered = token.toLowerCase();
-  const blocked = new Set(["de", "du", "des", "la", "le", "les", "pour", "par", "sur"]);
+  const blocked = new Set([
+    "de",
+    "du",
+    "des",
+    "la",
+    "le",
+    "les",
+    "pour",
+    "par",
+    "sur",
+    "titre",
+    "title",
+    "facture",
+    "invoice",
+    "nom",
+    "name",
+    "id",
+    "unique",
+    "client",
+    "employe",
+    "employé",
+  ]);
   if (blocked.has(lowered)) return false;
   if (/^[a-z]{2,3}$/i.test(token)) return false;
   return true;
@@ -337,6 +358,7 @@ function classifyMessage(input: {
   const isExpense = expenseHints.some((hint) => lower.includes(hint));
 
   const invoiceMatch = text.match(/(?:facture|invoice)\s*(?:#|n[o°])?\s*([a-zA-Z0-9-]{2,})/i);
+  const invoiceTitleMatch = text.match(/(?:titre|title)\s*:\s*([^\n\r]{2,220})/i);
   const amountMatch = text.match(/(-?\d[\d\s.,]*)\s*(€|eur|usd|\$|xaf|xof|cad|gbp)/i);
   const dueMatch = text.match(/(?:echeance|échéance|due date)\s*[:\-]?\s*([\d\/-]{8,10}|\d{4}-\d{2}-\d{2})/i);
   const paidMatch = text.match(/(?:date de paiement|paid on|payée le|payee le)\s*[:\-]?\s*([\d\/-]{8,10}|\d{4}-\d{2}-\d{2})/i);
@@ -386,10 +408,20 @@ function classifyMessage(input: {
 
   const description = text.length > 0 ? text.slice(0, 600) : null;
   const definitionCandidate = extractDefinitionCandidate(text);
-  const invoicePrefix = extractInvoicePrefix(invoiceMatch?.[1] ?? null, text);
+  const invoicePrefix = extractInvoicePrefix(invoiceMatch?.[1] ?? invoiceTitleMatch?.[1] ?? null, text);
+
+  const invoiceFromTitle = (() => {
+    const rawTitle = String(invoiceTitleMatch?.[1] ?? "").trim();
+    if (!rawTitle) return null;
+    const compact = rawTitle.replace(/\s+/g, " ").trim();
+    // Keep only meaningful title values and avoid generic labels accidentally captured.
+    if (!hasClearDefinition(compact)) return null;
+    return compact.slice(0, 120);
+  })();
+
   const invoiceNumber = isValidInvoiceToken(invoiceMatch?.[1] ?? null)
     ? String(invoiceMatch?.[1]).trim()
-    : null;
+    : invoiceFromTitle;
   const isInvoice = Boolean(invoiceNumber);
   const hasDefinition = hasClearDefinition(definitionCandidate);
 

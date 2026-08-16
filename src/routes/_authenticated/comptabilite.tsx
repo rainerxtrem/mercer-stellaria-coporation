@@ -400,7 +400,16 @@ function ComptabilitePage() {
   );
   const revenueRows = useMemo(() => weekFilteredRows.filter((row) => row.entry_side === "revenue"), [weekFilteredRows]);
   const expenseRows = useMemo(() => weekFilteredRows.filter((row) => row.entry_side === "expense"), [weekFilteredRows]);
-  const invoiceRows = useMemo(() => weekFilteredRows.filter((row) => row.invoice_number), [weekFilteredRows]);
+  const invoiceRows = useMemo(
+    () =>
+      weekFilteredRows.filter(
+        (row) =>
+          Boolean(row.invoice_number) ||
+          row.entry_type === "client_invoice" ||
+          row.entry_type === "supplier_invoice",
+      ),
+    [weekFilteredRows],
+  );
 
   const stats = useMemo(() => {
     let revenue = 0;
