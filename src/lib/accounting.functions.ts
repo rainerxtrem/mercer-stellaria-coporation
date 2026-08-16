@@ -559,8 +559,8 @@ export const listAccountingOperations = createServerFn({ method: "GET" })
       .from("accounting_operations")
       .select("id, company_id, webhook_event_id, source, discord_message_id, entry_side, entry_type, invoice_number, counterparty, emitter_name, description, amount, currency, operation_date, due_date, payment_date, status, needs_classification, created_at, updated_at")
       .eq("firm_id", firmId)
-      .order("operation_date", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("operation_date", { ascending: false });
 
     if (data.company_id) q = q.eq("company_id", data.company_id);
     if (data.side && data.side !== "all") q = q.eq("entry_side", data.side);
